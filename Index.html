@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventario y Ventas</title>
+    <style>
+        /* Diseño mejorado, limpio y fácil de utilizar */
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; background-color: #f0f2f5; color: #333; position: relative; }
+        h1 { color: #1e293b; text-align: center; margin-bottom: 30px; padding-right: 200px; }
+        h2, h3 { color: #334155; margin-top: 0; }
+        
+        .section { background: white; padding: 25px; margin-bottom: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .admin-only { display: none; background-color: #fef08a; border-left: 6px solid #eab308; padding: 20px; margin-top: 15px; border-radius: 6px; }
+        .admin-section { display: none; }
+        
+        /* Clase para ocultar el registro al vendedor */
+        .register-section { display: none; }
+        
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        .form-group { display: flex; flex-direction: column; }
+        
+        label { margin-top: 8px; font-weight: 600; font-size: 14px; color: #475569; }
+        input, select { padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; }
+        input:focus, select:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+        
+        button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: background 0.2s; width: 100%; max-width: 250px; margin-top: 15px; }
+        button:hover { background-color: #1d4ed8; }
+        .btn-success { background-color: #10b981; }
+        .btn-success:hover { background-color: #059669; }
+        .btn-secondary { background-color: #64748b; }
+        .btn-secondary:hover { background-color: #475569; }
+        .btn-danger { background-color: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 0; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-pdf { background-color: #ea580c; }
+        .btn-pdf:hover { background-color: #c2410c; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 14px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #f8fafc; color: #64748b; font-weight: 600; }
+        tr:hover { background-color: #f1f5f9; }
+
+        /* Globo de productos totales reposicionado en la esquina superior */
+        .kpi-container { position: absolute; top: 20px; right: 30px; z-index: 10; display: flex; gap: 10px; }
+        .kpi-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .kpi-card div:first-child { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+        .kpi-value { font-size: 20px; font-weight: bold; color: #1e40af; }
+        .kpi-sales { background: #ecfdf5; border-color: #a7f3d0; }
+        .kpi-sales .kpi-value { color: #065f46; }
+
+        /* Estilos del Ticket */
+        .ticket-strip { background: #fff; border: 2px dashed #cbd5e1; padding: 20px; max-width: 400px; margin: 20px auto; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .ticket-header { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px; }
+        .ticket-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+        .ticket-total { border-top: 1px dashed #333; margin-top: 10px; padding-top: 10px; font-weight: bold; }
+
+        @media (max-width: 768px) {
+            body { padding-top: 120px; }
+            h1 { padding-right: 0; }
+            .kpi-container { position: static; display: flex; justify-content: center; margin-bottom: 20px; }
+        }
+
+        /* Estilos específicos para la exportación de la tira de tickets */
+        @media print {
+            body * { visibility: hidden; background: transparent !important; box-shadow: none !important; }
+            #tiraTicketsContainer, #tiraTicketsContainer * { visibility: visible; }
+            #tiraTicketsContainer { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+            .ticket-strip { border: none; margin: 0 auto; max-width: 100%; width: 80mm; }
+            .btn-pdf { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="kpi-container">
+        <div class="kpi-card">
+            <div>Productos Totales</div>
+            <div id="totalProductosGlobal" class="kpi-value">0</div>
+        </div>
+        <div class="kpi-card kpi-sales">
+            <div>Ventas del Día</div>
+            <div id="totalVentasGlobal" class="kpi-value">$0.00</div>
+        </div>
+    </div>
+
+    <h1>Sistema de Gestión de Inventario y Ventas</h1>
+
+    <div class="section" id="authSection">
+        <h2 id="authTitle">Control de Acceso</h2>
+        
+        <div id="setupForm" style="display: none;">
+            <p style="color: #ea580c; font-weight: bold;">⚠️ No hay usuarios en el sistema. Registra el primer usuario (será Administrador):</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nombre de Usuario Admin:</label>
+                    <input type="text" id="setupUser">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="setupPass">
+                </div>
+            </div>
+            <button type="button" class="btn-success" onclick="registrarPrimerAdmin()">Crear Administrador Inicial</button>
+        </div>
+
+        <div id="loginForm" style="display: none;">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Selecciona tu Usuario:</label>
+                    <select id="loginSelectUser"></select>
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="loginPass">
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" onclick="iniciarSesion()">Iniciar Sesión</button>
+                <button type="button" class="btn-secondary" onclick="toggleRegistroVendedor(true)">Registrar Nuevo Vendedor</button>
+            </div>
+        </div>
+
+        <div id="registerUserForm" style="display: none;">
+            <h3>Registrar Nuevo Usuario (Rol Vendedor)</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nombre de Usuario:</label>
+                    <input type="text" id="regUser">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="regPass">
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="btn-success" onclick="registrarVendedor()">Guardar Usuario Vendedor</button>
+                <button type="button" class="btn-secondary" onclick="toggleRegistroVendedor(false)">Volver al Login</button>
+            </div>
+        </div>
+
+        <div id="userInfoView" style="display: none;">
+            <p style="font-size: 16px;">Sesión activa: <strong id="currentUserName">--</strong> (<span id="currentUserRole" style="font-weight: bold; text-transform: uppercase;">--</span>)</p>
+            <button type="button" class="btn-danger" onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div id="mainSystemContainer" style="display: none;">
+        <div id="registerSection" class="section register-section">
+            <h2>Registro de Productos e Inventario</h2>
+            <form id="productForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Código del Producto:</label>
+                        <input type="text" id="prodCodigo" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre del Producto:</label>
+                        <input type="text" id="prodNombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Marca:</label>
+                        <input type="text" id="prodMarca" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Precio de Venta al Público:</label>
+                        <input type="number" id="prodPrecio" required>
+                    </div>
+                </div>
+
+                <div id="adminFields" class="admin-only">
+                    <h3>Campos Exclusivos de Administrador</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Dueño del Producto:</label>
+                            <input type="text" id="prodDueno" placeholder="Ej. Administrador, Socio A, etc.">
+                        </div>
+                        <div class="form-group">
+                            <label>Categoría:</label>
+                            <input type="text" id="prodCategoria">
+                        </div>
+                        <div class="form-group">
+                            <label>Costo del Producto (Precio Compra):</label>
+                            <input type="number" id="prodCosto">
+                        </div>
+                        <div class="form-group">
+                            <label>Costos Adicionales / Operativos:</label>
+                            <input type="number" id="prodCostosAdic">
+                        </div>
+                        <div class="form-group">
+                            <label>Descuento Máximo Permitido (%):</label>
+                            <input type="number" id="prodDescuento" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Cantidad Inicial en Existencia:</label>
+                            <input type="number" id="prodCantidad" value="1" min="1">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" onclick="agregarProducto()">Registrar Producto</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Módulo de Ventas y Abonos</h2>
+            <form id="salesForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Producto a Vender (Busca por Nombre o Código):</label>
+                        <input type="text" id="saleProductoBusqueda" list="listaProductosDatalist" oninput="mostrarDuenoVenta(); calcularCambio();" placeholder="Escribe el código o nombre...">
+                        <datalist id="listaProductosDatalist">
+                        </datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>Precio del Producto:</label>
+                        <input type="text" id="salePrecioDisplay" style="background-color: #ffffff; font-weight: bold; color: #1e40af;" placeholder="$0.00" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Dueño del Producto (Modificable):</label>
+                        <input type="text" id="saleDuenoDisplay" style="background-color: #ffffff;" placeholder="Dueño asignado" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de Venta:</label>
+                        <select id="saleTipo" onchange="toggleMontoAbono(); calcularCambio();">
+                            <option value="contado">Venta de Contado</option>
+                            <option value="plazos">Venta a Plazos / Pagos</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Método de Pago:</label>
+                        <select id="saleMetodoPago">
+                            <option value="efectivo">Efectivo</option>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="terminal">Terminal (Tarjeta)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="grupoMontoAbono" style="display: none;">
+                        <label>Monto de Abono Inicial / Pago Parcial:</label>
+                        <input type="number" id="saleAbono" oninput="calcularCambio()" placeholder="Ej. 500" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Efectivo Recibido (Para Calcular Cambio):</label>
+                        <input type="number" id="saleEfectivoRecibido" oninput="calcularCambio()" placeholder="Ej. 1000">
+                    </div>
+                    <div class="form-group">
+                        <label>Cambio a Regresar:</label>
+                        <input type="text" id="saleCambioDisplay" style="background-color: #f8fafc; font-weight: bold; color: #047857;" placeholder="$0.00" readonly>
+                    </div>
+                </div>
+                <button type="button" class="btn-success" onclick="procesarVenta()">Procesar Venta</button>
+            </form>
+        </div>
+
+        <div id="adminSalesSection" class="section admin-section">
+            <h2>Historial y Filtro de Ventas Realizadas</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Filtrar por Año (YYYY):</label>
+                    <input type="number" id="filterAnio" placeholder="Ej. 2026">
+                </div>
+                <div class="form-group">
+                    <label>Filtrar por Mes (1-12):</label>
+                    <input type="number" id="filterMes" placeholder="Ej. 6" min="1" max="12">
+                </div>
+                <div class="form-group">
+                    <label>Filtrar por Día (1-31):</label>
+                    <input type="number" id="filterDia" placeholder="Ej. 18" min="1" max="31">
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="btn-success" onclick="filtrarVentas()">Aplicar Filtro</button>
+                <button type="button" class="btn-secondary" onclick="limpiarFiltrosVentas()">Limpiar Filtros</button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha / Hora</th>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Dueño</th>
+                        <th>Tipo</th>
+                        <th>Método</th>
+                        <th>Precio Total</th>
+                        <th>Monto Pagado / Abono</th>
+                        <th>Restante</th>
+                    </tr>
+                </thead>
+                <tbody id="salesTableBody">
+                    <tr>
+                        <td colspan="9" style="text-align: center; color: #64748b;">No hay ventas registradas o que coincidan con el filtro.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="adminCorteSection" class="section admin-section">
+            <h2>Corte de Caja (Tira de Tickets del Día)</h2>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="btn-success" onclick="generarCorteTira()">Generar Corte de Caja de Hoy</button>
+                <button type="button" class="btn-pdf" id="btnImprimirPDF" style="display: none;" onclick="imprimirCortePDF()">Imprimir Corte en PDF</button>
+            </div>
+            
+            <div id="tiraTicketsContainer" style="display: none;">
+                <div class="ticket-strip">
+                    <div class="ticket-header">
+                        TIRA DE COMPROBACIÓN DE VENTAS<br>
+                        FECHA CORTE: <span id="ticketFechaCorte">--/--/----</span>
+                    </div>
+                    <div id="ticketItems">
+                    </div>
+                    <div class="ticket-total">
+                        <div class="ticket-row">
+                            <span>TOTAL PRODUCTOS VENDIDOS:</span>
+                            <span id="ticketTotalCant">0 u.</span>
+                        </div>
+                        <div class="ticket-row">
+                            <span>TOTAL EFECTIVO / INGRESADO:</span>
+                            <span id="ticketTotalIngresado">$0.00</span>
+                        </div>
+                        <div class="ticket-row">
+                            <span>TOTAL EN APARTADOS/DEUDA:</span>
+                            <span id="ticketTotalPorCobrar">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="adminReportsSection" class="section admin-only">
+            <h2>Control de Productos por Dueño</h2>
+            <div class="form-grid" style="max-width: 400px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label for="selectReporteDueno">Selecciona un Dueño:</label>
+                    <select id="selectReporteDueno" onchange="renderizarReportePorDueno()">
+                        <option value="">-- Selecciona un dueño --</option>
+                    </select>
+                </div>
+            </div>
+
+            <h3 id="tituloReporteDueno">Productos del Dueño Seleccionado</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Marca</th>
+                        <th>Precio</th>
+                        <th>Categoría</th>
+                        <th>Costo Prod.</th>
+                        <th>Costos Adic.</th>
+                        <th>Descuento</th>
+                        <th>Cantidad en Inventario</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="ownersTableBody">
+                    <tr>
+                        <td colspan="10" style="text-align: center; color: #64748b;">Selecciona un dueño arriba para desplegar sus productos y existencias.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Inventario General</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Marca</th>
+                        <th>Precio</th>
+                        <th>Cantidad disp.</th>
+                        <th class="admin-col" style="display:none;">Dueño</th>
+                        <th class="admin-col" style="display:none;">Categoría</th>
+                        <th class="admin-col" style="display:none;">Costo Prod.</th>
+                        <th class="admin-col" style="display:none;">Costos Adic.</th>
+                        <th class="admin-col" style="display:none;">Descuento</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let inventario = [];
+        let ventas = []; 
+        let usuarios = [];
+        let usuarioLogueado = null;
+
+        // Guardar arrays en LocalStorage
+        function guardarEnLocalStorage() {
+            localStorage.setItem('sistema_inventario_data', JSON.stringify(inventario));
+            localStorage.setItem('sistema_ventas_data', JSON.stringify(ventas));
+            localStorage.setItem('sistema_usuarios_data', JSON.stringify(usuarios));
+        }
+
+        // Cargar arrays desde LocalStorage
+        function cargarDesdeLocalStorage() {
+            const dataInv = localStorage.getItem('sistema_inventario_data');
+            const dataVen = localStorage.getItem('sistema_ventas_data');
+            const dataUsu = localStorage.getItem('sistema_usuarios_data');
+
+            if (dataInv) inventario = JSON.parse(dataInv);
+            if (dataVen) ventas = JSON.parse(dataVen);
+            if (dataUsu) usuarios = JSON.parse(dataUsu);
+        }
+
+        // Inicialización y verificación de pantallas de Login
+        function inicializarFlujoUsuarios() {
+            cargarDesdeLocalStorage();
+            
+            const setupForm = document.getElementById('setupForm');
+            const loginForm = document.getElementById('loginForm');
+            const registerUserForm = document.getElementById('registerUserForm');
+            const userInfoView = document.getElementById('userInfoView');
+            const mainSystemContainer = document.getElementById('mainSystemContainer');
+
+            registerUserForm.style.display = 'none';
+
+            if (usuarios.length === 0) {
+                setupForm.style.display = 'block';
+                loginForm.style.display = 'none';
+                userInfoView.style.display = 'none';
+                mainSystemContainer.style.display = 'none';
+            } else {
+                setupForm.style.display = 'none';
+                if (!usuarioLogueado) {
+                    loginForm.style.display = 'block';
+                    userInfoView.style.display = 'none';
+                    mainSystemContainer.style.display = 'none';
+                    actualizarSelectLoginUsuarios();
+                } else {
+                    loginForm.style.display = 'none';
+                    userInfoView.style.display = 'block';
+                    mainSystemContainer.style.display = 'block';
+                    document.getElementById('currentUserName').innerText = usuarioLogueado.username;
+                    document.getElementById('currentUserRole').innerText = usuarioLogueado.role;
+                }
+            }
+            checkRole();
+        }
+
+        function actualizarSelectLoginUsuarios() {
+            const select = document.getElementById('loginSelectUser');
+            select.innerHTML = '';
+            usuarios.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.username;
+                opt.textContent = `${u.username} (${u.role})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function registrarPrimerAdmin() {
+            const u = document.getElementById('setupUser').value.trim();
+            const p = document.getElementById('setupPass').value.trim();
+
+            if (!u || !p) {
+                alert("Introduce un usuario y contraseña válidos.");
+                return;
+            }
+
+            usuarios.push({ username: u, pass: p, role: 'admin' });
+            guardarEnLocalStorage();
+            alert("¡Administrador inicial creado con éxito! Ya puedes iniciar sesión.");
+            document.getElementById('setupUser').value = '';
+            document.getElementById('setupPass').value = '';
+            inicializarFlujoUsuarios();
+        }
+
+        function toggleRegistroVendedor(mostrar) {
+            document.getElementById('loginForm').style.display = mostrar ? 'none' : 'block';
+            document.getElementById('registerUserForm').style.display = mostrar ? 'block' : 'none';
+        }
+
+        function registrarVendedor() {
+            const u = document.getElementById('regUser').value.trim();
+            const p = document.getElementById('regPass').value.trim();
+
+            if (!u || !p) {
+                alert("Por favor rellena ambos campos.");
+                return;
+            }
+
+            const existe = usuarios.find(user => user.username.toLowerCase() === u.toLowerCase());
+            if (existe) {
+                alert("Este nombre de usuario ya está registrado.");
+                return;
+            }
+
+            usuarios.push({ username: u, pass: p, role: 'vendedor' });
+            guardarEnLocalStorage();
+            alert(`Usuario '${u}' registrado exitosamente como Vendedor.`);
+            document.getElementById('regUser').value = '';
+            document.getElementById('regPass').value = '';
+            toggleRegistroVendedor(false);
+            actualizarSelectLoginUsuarios();
+        }
+
+        function iniciarSesion() {
+            const selectedUser = document.getElementById('loginSelectUser').value;
+            const passInput = document.getElementById('loginPass').value;
+
+            const cuenta = usuarios.find(u => u.username === selectedUser);
+            if (cuenta && cuenta.pass === passInput) {
+                usuarioLogueado = cuenta;
+                document.getElementById('loginPass').value = '';
+                inicializarFlujoUsuarios();
+                actualizarTodo();
+            } else {
+                alert("Contraseña incorrecta.");
+            }
+        }
+
+        function cerrarSesion() {
+            usuarioLogueado = null;
+            inicializarFlujoUsuarios();
+        }
+
+        function checkRole() {
+            if (!usuarioLogueado) return;
+            
+            const role = usuarioLogueado.role;
+            const registerSection = document.getElementById('registerSection');
+            const adminFields = document.getElementById('adminFields');
+            const adminReports = document.getElementById('adminReportsSection');
+            const adminSections = document.querySelectorAll('.admin-section');
+            const adminColumns = document.querySelectorAll('.admin-col');
+
+            if (role === 'admin') {
+                registerSection.style.display = 'block';
+                adminFields.style.display = 'block';
+                adminReports.style.display = 'block';
+                adminSections.forEach(sec => sec.style.display = 'block');
+                adminColumns.forEach(col => col.style.display = 'table-cell');
+            } else {
+                registerSection.style.display = 'none';
+                adminFields.style.display = 'none';
+                adminReports.style.display = 'none';
+                adminSections.forEach(sec => sec.style.display = 'none');
+                adminColumns.forEach(col => col.style.display = 'none');
+            }
+        }
+
+        function agregarProducto() {
+            const codigo = document.getElementById('prodCodigo').value.trim();
+            const nombre = document.getElementById('prodNombre').value.trim();
+            const precio = parseFloat(document.getElementById('prodPrecio').value);
+            const cantidad = parseInt(document.getElementById('prodCantidad').value) || 1;
+
+            if(!codigo || !nombre || isNaN(precio) || precio <= 0) {
+                alert("Por favor, llena los campos básicos obligatorios con datos válidos (Código, Nombre y Precio).");
+                return;
+            }
+
+            let existente = inventario.find(p => p.codigo === codigo);
+            if (existente) {
+                existente.cantidad += cantidad;
+            } else {
+                const producto = {
+                    codigo: codigo,
+                    nombre: nombre,
+                    marca: document.getElementById('prodMarca').value || 'N/A',
+                    precio: precio,
+                    dueno: document.getElementById('prodDueno').value || 'No asignado',
+                    categoria: document.getElementById('prodCategoria').value || 'N/A',
+                    costo: parseFloat(document.getElementById('prodCosto').value) || 0,
+                    costosAdic: parseFloat(document.getElementById('prodCostosAdic').value) || 0,
+                    descuento: parseFloat(document.getElementById('prodDescuento').value) || 0,
+                    cantidad: cantidad
+                };
+                inventario.push(producto);
+            }
+            
+            guardarEnLocalStorage();
+            actualizarTodo();
+            document.getElementById('productForm').reset();
+            checkRole(); 
+        }
+
+        function toggleMontoAbono() {
+            const tipo = document.getElementById('saleTipo').value;
+            const grupo = document.getElementById('grupoMontoAbono');
+            if (tipo === 'plazos') {
+                grupo.style.display = 'flex';
+                document.getElementById('saleAbono').value = "";
+            } else {
+                grupo.style.display = 'none';
+                document.getElementById('saleAbono').value = "0";
+            }
+        }
+
+        function mostrarDuenoVenta() {
+            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
+            const displayInput = document.getElementById('saleDuenoDisplay');
+            const precioInput = document.getElementById('salePrecioDisplay');
+            
+            const prodEncontrado = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
+            
+            if (prodEncontrado) {
+                displayInput.value = prodEncontrado.dueno;
+                precioInput.value = `$${parseFloat(prodEncontrado.precio).toFixed(2)}`;
+            } else {
+                displayInput.value = "";
+                precioInput.value = "";
+            }
+        }
+
+        function calcularCambio() {
+            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
+            const tipo = document.getElementById('saleTipo').value;
+            const efectivoRecibido = parseFloat(document.getElementById('saleEfectivoRecibido').value);
+            const cambioDisplay = document.getElementById('saleCambioDisplay');
+            
+            const prodEncontrado = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
+            
+            if (!prodEncontrado || isNaN(efectivoRecibido)) {
+                cambioDisplay.value = "";
+                return;
+            }
+
+            let montoAColerar = 0;
+            if (tipo === 'contado') {
+                montoAColerar = parseFloat(prodEncontrado.precio);
+            } else {
+                montoAColerar = parseFloat(document.getElementById('saleAbono').value) || 0;
+            }
+
+            let cambio = efectivoRecibido - montoAColerar;
+            if (cambio >= 0) {
+                cambioDisplay.value = `$${cambio.toFixed(2)}`;
+            } else {
+                cambioDisplay.value = "Falta efectivo";
+            }
+        }
+
+        function editarCantidadProducto(codigo) {
+            let prod = inventario.find(p => p.codigo === codigo);
+            if (!prod) return;
+            
+            let nuevaCantStr = prompt(`Modificar existencias para el producto: ${prod.nombre}\nCantidad actual: ${prod.cantidad}`, prod.cantidad);
+            if (nuevaCantStr === null) return; 
+            
+            let nuevaCant = parseInt(nuevaCantStr);
+            if (isNaN(nuevaCant) || nuevaCant < 0) {
+                alert("Por favor, ingrese una cantidad numérica válida igual o mayor a 0.");
+                return;
+            }
+            
+            prod.cantidad = nuevaCant;
+            guardarEnLocalStorage();
+            actualizarTodo();
+        }
+
+        function actualizarTodo() {
+            actualizarTablaGeneral(inventario);
+            actualizarSelectProductos();
+            actualizarSelectDuenos();
+            renderizarReportePorDueno();
+            renderizarHistorialVentas(ventas);
+            actualizarKpis();
+        }
+
+        function actualizarKpis() {
+            let totalProds = inventario.reduce((acc, p) => acc + p.cantidad, 0);
+            document.getElementById('totalProductosGlobal').innerText = totalProds;
+
+            let hoy = new Date().toLocaleDateString();
+            let totalDineroHoy = ventas
+                .filter(v => v.fechaCorta === hoy)
+                .reduce((acc, v) => acc + v.montoPagado, 0);
+            
+            document.getElementById('totalVentasGlobal').innerText = `$${totalDineroHoy.toFixed(2)}`;
+        }
+
+        function actualizarSelectProductos() {
+            const datalist = document.getElementById('listaProductosDatalist');
+            datalist.innerHTML = '';
+            
+            inventario.forEach((prod) => {
+                if (prod.cantidad > 0) {
+                    const option = document.createElement('option');
+                    option.value = `[${prod.codigo}] ${prod.nombre}`;
+                    datalist.appendChild(option);
+                }
+            });
+        }
+
+        function actualizarSelectDuenos() {
+            const select = document.getElementById('selectReporteDueno');
+            const dueñoActual = select.value;
+            select.innerHTML = '<option value="">-- Selecciona un dueño --</option>';
+
+            let duenosUnicos = new Set();
+            inventario.forEach(prod => duenosUnicos.add(prod.dueno));
+
+            duenosUnicos.forEach(dueno => {
+                const option = document.createElement('option');
+                option.value = dueno;
+                option.textContent = dueno;
+                if (dueno === dueñoActual) option.selected = true;
+                select.appendChild(option);
+            });
+        }
+
+        function renderizarReportePorDueno() {
+            const targetDueno = document.getElementById('selectReporteDueno').value;
+            const tbody = document.getElementById('ownersTableBody');
+            const titulo = document.getElementById('tituloReporteDueno');
+            tbody.innerHTML = '';
+
+            if (!targetDueno) {
+                titulo.innerText = "Productos del Dueño Seleccionado";
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Selecciona un dueño arriba para desplegar sus productos y existencias.</td></tr>`;
+                return;
+            }
+
+            titulo.innerText = `Productos de: ${targetDueno}`;
+
+            let productosFiltrados = inventario.filter(prod => prod.dueno === targetDueno);
+
+            if (productosFiltrados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Este dueño no posee productos registrados actualmente.</td></tr>`;
+                return;
+            }
+
+            productosFiltrados.forEach(prod => {
+                const fila = document.createElement('tr');
+                fila.innerHTML = `
+                    <td>${prod.codigo}</td>
+                    <td><strong>${prod.nombre}</strong></td>
+                    <td>${prod.marca}</td>
+                    <td>$${prod.precio}</td>
+                    <td>${prod.categoria}</td>
+                    <td>$${prod.costo}</td>
+                    <td>$${prod.costosAdic}</td>
+                    <td>${prod.descuento}%</td>
+                    <td style="font-weight: bold; color: #1e40af;">${prod.cantidad} u.</td>
+                    <td><button type="button" class="btn-danger" onclick="editarCantidadProducto('${prod.codigo}')">Editar Cantidad</button></td>
+                `;
+                tbody.appendChild(fila);
+            });
+        }
+
+        function actualizarTablaGeneral(listaProductos) {
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+
+            listaProductos.forEach(prod => {
+                const fila = document.createElement('tr');
+                
+                fila.innerHTML = `
+                    <td>${prod.codigo}</td>
+                    <td>${prod.nombre}</td>
+                    <td>${prod.marca}</td>
+                    <td>$${prod.precio}</td>
+                    <td style="font-weight: bold;">${prod.cantidad} u.</td>
+                    <td class="admin-col" style="display:none;">${prod.dueno}</td>
+                    <td class="admin-col" style="display:none;">${prod.categoria}</td>
+                    <td class="admin-col" style="display:none;">$${prod.costo}</td>
+                    <td class="admin-col" style="display:none;">$${prod.costosAdic}</td>
+                    <td class="admin-col" style="display:none;">${prod.descuento}%</td>
+                `;
+                tbody.appendChild(fila);
+            });
+            
+            if(usuarioLogueado) {
+                const role = usuarioLogueado.role;
+                const adminColumns = document.querySelectorAll('.admin-col');
+                adminColumns.forEach(col => col.style.display = (role === 'admin') ? 'table-cell' : 'none');
+            }
+        }
+
+        function procesarVenta() {
+            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
+            const tipo = document.getElementById('saleTipo').value;
+            const metodo = document.getElementById('saleMetodoPago').value;
+            let abonoInput = parseFloat(document.getElementById('saleAbono').value);
+
+            let prodOriginal = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
+
+            if(!prodOriginal) {
+                alert("Por favor, introduce o selecciona un producto válido que exista en el sistema.");
+                return;
+            }
+
+            if (prodOriginal.cantidad <= 0) {
+                alert("No hay existencias suficientes de este producto en el sistema.");
+                return;
+            }
+
+            let precioTotal = parseFloat(prodOriginal.precio);
+            let montoPagado = 0;
+
+            if (tipo === 'contado') {
+                montoPagado = precioTotal;
+            } else {
+                if (isNaN(abonoInput) || abonoInput < 0) {
+                    alert("Por favor, ingrese un monto de abono inicial válido.");
+                    return;
+                }
+                if (abonoInput > precioTotal) {
+                    alert("El abono no puede ser mayor que el precio total del producto.");
+                    return;
+                }
+                montoPagado = abonoInput;
+            }
+
+            let restante = precioTotal - montoPagado;
+            let ahora = new Date();
+
+            const nuevaVenta = {
+                idVenta: 'V' + ahora.getTime(),
+                fechaObj: ahora,
+                fechaTexto: ahora.toLocaleString(),
+                fechaCorta: ahora.toLocaleDateString(),
+                anio: ahora.getFullYear(),
+                mes: ahora.getMonth() + 1,
+                dia: ahora.getDate(),
+                codigo: prodOriginal.codigo,
+                nombre: prodOriginal.nombre,
+                marca: prodOriginal.marca,
+                dueno: prodOriginal.dueno,
+                categoria: prodOriginal.categoria,
+                costo: prodOriginal.costo,
+                costosAdic: prodOriginal.costosAdic,
+                descuento: prodOriginal.descuento,
+                tipoVenta: tipo,
+                metodoPago: metodo,
+                precioTotal: precioTotal,
+                montoPagado: montoPagado,
+                restante: restante
+            };
+
+            prodOriginal.cantidad--;
+            ventas.push(nuevaVenta);
+            
+            guardarEnLocalStorage();
+
+            alert(`¡Venta procesada con éxito!\nProducto: ${nuevaVenta.nombre}\nTotal: $${precioTotal.toFixed(2)}\nPagado/Abono: $${montoPagado.toFixed(2)}\nRestante: $${restante.toFixed(2)}`);
+
+            actualizarTodo();
+            document.getElementById('salesForm').reset();
+            toggleMontoAbono();
+        }
+
+        function renderizarHistorialVentas(listaVentas) {
+            const tbody = document.getElementById('salesTableBody');
+            tbody.innerHTML = '';
+
+            if (listaVentas.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b;">No hay ventas registradas o que coincidan con el filtro.</td></tr>`;
+                return;
+            }
+
+            listaVentas.forEach(v => {
+                const fila = document.createElement('tr');
+                fila.innerHTML = `
+                    <td>${v.fechaTexto}</td>
+                    <td>${v.codigo}</td>
+                    <td><strong>${v.nombre}</strong></td>
+                    <td>${v.dueno}</td>
+                    <td><span style="padding: 3px 8px; border-radius: 4px; font-size:12px; font-weight:bold; background-color:${v.tipoVenta === 'contado' ? '#d1fae5; color:#065f46;' : '#fef3c7; color:#92400e;'}">${v.tipoVenta.toUpperCase()}</span></td>
+                    <td>${v.metodoPago.toUpperCase()}</td>
+                    <td>$${v.precioTotal.toFixed(2)}</td>
+                    <td style="color: #047857; font-weight: bold;">$${v.montoPagado.toFixed(2)}</td>
+                    <td style="color: ${v.restante > 0 ? '#b91c1c' : '#64748b'}; font-weight: bold;">$${v.restante.toFixed(2)}</td>
+                `;
+                tbody.appendChild(fila);
+            });
+        }
+
+        function filtrarVentas() {
+            const fAnio = document.getElementById('filterAnio').value;
+            const fMes = document.getElementById('filterMes').value;
+            const fDia = document.getElementById('filterDia').value;
+
+            let ventasFiltradas = ventas.filter(v => {
+                let cumple = true;
+                if (fAnio && v.anio != fAnio) cumple = false;
+                if (fMes && v.mes != fMes) cumple = false;
+                if (fDia && v.dia != fDia) cumple = false;
+                return cumple;
+            });
+
+            renderizarHistorialVentas(ventasFiltradas);
+        }
+
+        function limpiarFiltrosVentas() {
+            document.getElementById('filterAnio').value = "";
+            document.getElementById('filterMes').value = "";
+            document.getElementById('filterDia').value = "";
+            renderizarHistorialVentas(ventas);
+        }
+
+        function generarCorteTira() {
+            const container = document.getElementById('tiraTicketsContainer');
+            const itemsContainer = document.getElementById('ticketItems');
+            const btnImprimir = document.getElementById('btnImprimirPDF');
+            const hoy = new Date().toLocaleDateString();
+
+            document.getElementById('ticketFechaCorte').innerText = hoy;
+            itemsContainer.innerHTML = '';
+
+            let ventasHoy = ventas.filter(v => v.fechaCorta === hoy);
+
+            if (ventasHoy.length === 0) {
+                itemsContainer.innerHTML = '<div style="text-align:center; padding:10px; color:#64748b;">No se realizaron ventas el día de hoy.</div>';
+                document.getElementById('ticketTotalCant').innerText = "0 u.";
+                document.getElementById('ticketTotalIngresado').innerText = "$0.00";
+                document.getElementById('ticketTotalPorCobrar').innerText = "$0.00";
+                container.style.display = 'block';
+                btnImprimir.style.display = 'none';
+                return;
+            }
+
+            let totalIngresado = 0;
+            let totalPorCobrar = 0;
+
+            ventasHoy.forEach(v => {
+                totalIngresado += v.montoPagado;
+                totalPorCobrar += v.restante;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.style.borderBottom = '1px dotted #cbd5e1';
+                itemDiv.style.padding = '8px 0';
+                itemDiv.innerHTML = `
+                    <div class="ticket-row">
+                        <strong>[${v.codigo}] ${v.nombre}</strong>
+                        <span>$${v.precioTotal.toFixed(2)}</span>
+                    </div>
+                    <div class="ticket-row" style="font-size: 11px; color: #475569;">
+                        <span>Tipo: ${v.tipoVenta.toUpperCase()} (${v.metodoPago})</span>
+                        <span>Dueño: ${v.dueno}</span>
+                    </div>
+                    <div class="ticket-row" style="font-size: 11px; color: #047857;">
+                        <span>Cobrado / Abono:</span>
+                        <span>$${v.montoPagado.toFixed(2)}</span>
+                    </div>
+                    ${v.restante > 0 ? `
+                    <div class="ticket-row" style="font-size: 11px; color: #b91c1c;">
+                        <span>Saldo Restante:</span>
+                        <span>$${v.restante.toFixed(2)}</span>
+                    </div>` : ''}
+                `;
+                itemsContainer.appendChild(itemDiv);
+            });
+
+            document.getElementById('ticketTotalCant').innerText = `${ventasHoy.length} u.`;
+            document.getElementById('ticketTotalIngresado').innerText = `$${totalIngresado.toFixed(2)}`;
+            document.getElementById('ticketTotalPorCobrar').innerText = `$${totalPorCobrar.toFixed(2)}`;
+            container.style.display = 'block';
+            btnImprimir.style.display = 'inline-block';
+            
+            container.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function imprimirCortePDF() {
+            window.print();
+        }
+
+        // Ejecutar flujo de seguridad inicial en carga
+        inicializarFlujoUsuarios();
+    </script>
+</body>
+</html>
