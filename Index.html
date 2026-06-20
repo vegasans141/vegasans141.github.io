@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Inventario y Ventas</title>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
         /* Diseño mejorado, limpio y fácil de utilizar */
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; background-color: #f0f2f5; color: #333; position: relative; }
@@ -388,100 +386,62 @@
     </div>
 
     <script>
-    <script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyBeeupOrH0B364qP5-aXfmSlavwylMpxZs",
-    authDomain: "lunalimon.firebaseapp.com",
-    projectId: "lunalimon",
-    storageBucket: "lunalimon.firebasestorage.app",
-    messagingSenderId: "1030355563981",
-    appId: "1:1030355563981:web:243fcf5743959ff24bc084"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
-        };
-
-        // Inicializar Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-
         let inventario = [];
         let ventas = []; 
         let usuarios = [];
         let usuarioLogueado = null;
 
-        // Guarda los datos directamente en la nube de Firebase para que todos los vean
+        // Guardar arrays en LocalStorage
         function guardarEnLocalStorage() {
-            db.ref('sistema_inventario_data').set(inventario);
-            db.ref('sistema_ventas_data').set(ventas);
-            db.ref('sistema_usuarios_data').set(usuarios);
+            localStorage.setItem('sistema_inventario_data', JSON.stringify(inventario));
+            localStorage.setItem('sistema_ventas_data', JSON.stringify(ventas));
+            localStorage.setItem('sistema_usuarios_data', JSON.stringify(usuarios));
         }
 
-        // Lee los datos en tiempo real desde Firebase
+        // Cargar arrays desde LocalStorage
         function cargarDesdeLocalStorage() {
-            // Escuchar cambios en inventario
-            db.ref('sistema_inventario_data').on('value', (snapshot) => {
-                const data = snapshot.val();
-                inventario = data ? data : [];
-                actualizarTodo();
-            });
+            const dataInv = localStorage.getItem('sistema_inventario_data');
+            const dataVen = localStorage.getItem('sistema_ventas_data');
+            const dataUsu = localStorage.getItem('sistema_usuarios_data');
 
-            // Escuchar cambios en ventas
-            db.ref('sistema_ventas_data').on('value', (snapshot) => {
-                const data = snapshot.val();
-                ventas = data ? data : [];
-                actualizarTodo();
-            });
-
-            // Escuchar cambios en usuarios
-            db.ref('sistema_usuarios_data').on('value', (snapshot) => {
-                const data = snapshot.val();
-                usuarios = data ? data : [];
-                
-                // Re-inicializar el flujo visual de accesos de manera dinámica
-                const setupForm = document.getElementById('setupForm');
-                const loginForm = document.getElementById('loginForm');
-                const userInfoView = document.getElementById('userInfoView');
-                const mainSystemContainer = document.getElementById('mainSystemContainer');
-
-                if (usuarios.length === 0) {
-                    setupForm.style.display = 'block';
-                    loginForm.style.display = 'none';
-                    userInfoView.style.display = 'none';
-                    mainSystemContainer.style.display = 'none';
-                } else {
-                    setupForm.style.display = 'none';
-                    if (!usuarioLogueado) {
-                        loginForm.style.display = 'block';
-                        userInfoView.style.display = 'none';
-                        mainSystemContainer.style.display = 'none';
-                        actualizarSelectLoginUsuarios();
-                    } else {
-                        loginForm.style.display = 'none';
-                        userInfoView.style.display = 'block';
-                        mainSystemContainer.style.display = 'block';
-                        document.getElementById('currentUserName').innerText = usuarioLogueado.username;
-                        document.getElementById('currentUserRole').innerText = usuarioLogueado.role;
-                    }
-                }
-                checkRole();
-            });
+            if (dataInv) inventario = JSON.parse(dataInv);
+            if (dataVen) ventas = JSON.parse(dataVen);
+            if (dataUsu) usuarios = JSON.parse(dataUsu);
         }
 
         // Inicialización y verificación de pantallas de Login
         function inicializarFlujoUsuarios() {
             cargarDesdeLocalStorage();
             
+            const setupForm = document.getElementById('setupForm');
+            const loginForm = document.getElementById('loginForm');
             const registerUserForm = document.getElementById('registerUserForm');
+            const userInfoView = document.getElementById('userInfoView');
+            const mainSystemContainer = document.getElementById('mainSystemContainer');
+
             registerUserForm.style.display = 'none';
+
+            if (usuarios.length === 0) {
+                setupForm.style.display = 'block';
+                loginForm.style.display = 'none';
+                userInfoView.style.display = 'none';
+                mainSystemContainer.style.display = 'none';
+            } else {
+                setupForm.style.display = 'none';
+                if (!usuarioLogueado) {
+                    loginForm.style.display = 'block';
+                    userInfoView.style.display = 'none';
+                    mainSystemContainer.style.display = 'none';
+                    actualizarSelectLoginUsuarios();
+                } else {
+                    loginForm.style.display = 'none';
+                    userInfoView.style.display = 'block';
+                    mainSystemContainer.style.display = 'block';
+                    document.getElementById('currentUserName').innerText = usuarioLogueado.username;
+                    document.getElementById('currentUserRole').innerText = usuarioLogueado.role;
+                }
+            }
+            checkRole();
         }
 
         function actualizarSelectLoginUsuarios() {
@@ -549,14 +509,7 @@
             if (cuenta && cuenta.pass === passInput) {
                 usuarioLogueado = cuenta;
                 document.getElementById('loginPass').value = '';
-                
-                document.getElementById('loginForm').style.display = 'none';
-                document.getElementById('userInfoView').style.display = 'block';
-                document.getElementById('mainSystemContainer').style.display = 'block';
-                document.getElementById('currentUserName').innerText = usuarioLogueado.username;
-                document.getElementById('currentUserRole').innerText = usuarioLogueado.role;
-                
-                checkRole();
+                inicializarFlujoUsuarios();
                 actualizarTodo();
             } else {
                 alert("Contraseña incorrecta.");
@@ -565,10 +518,7 @@
 
         function cerrarSesion() {
             usuarioLogueado = null;
-            document.getElementById('loginForm').style.display = 'block';
-            document.getElementById('userInfoView').style.display = 'none';
-            document.getElementById('mainSystemContainer').style.display = 'none';
-            checkRole();
+            inicializarFlujoUsuarios();
         }
 
         function checkRole() {
@@ -627,6 +577,7 @@
             }
             
             guardarEnLocalStorage();
+            actualizarTodo();
             document.getElementById('productForm').reset();
             checkRole(); 
         }
@@ -702,6 +653,7 @@
             
             prod.cantidad = nuevaCant;
             guardarEnLocalStorage();
+            actualizarTodo();
         }
 
         function actualizarTodo() {
@@ -863,6 +815,7 @@
 
             const nuevaVenta = {
                 idVenta: 'V' + ahora.getTime(),
+                fechaObj: ahora,
                 fechaTexto: ahora.toLocaleString(),
                 fechaCorta: ahora.toLocaleDateString(),
                 anio: ahora.getFullYear(),
@@ -890,6 +843,7 @@
 
             alert(`¡Venta procesada con éxito!\nProducto: ${nuevaVenta.nombre}\nTotal: $${precioTotal.toFixed(2)}\nPagado/Abono: $${montoPagado.toFixed(2)}\nRestante: $${restante.toFixed(2)}`);
 
+            actualizarTodo();
             document.getElementById('salesForm').reset();
             toggleMontoAbono();
         }
@@ -1012,6 +966,5 @@
         // Ejecutar flujo de seguridad inicial en carga
         inicializarFlujoUsuarios();
     </script>
-
 </body>
 </html>
