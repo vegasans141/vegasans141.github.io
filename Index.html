@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Inventario y Ventas</title>
     <style>
-        /* Diseño mejorado, limpio y fácil de utilizar */
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; background-color: #f0f2f5; color: #333; position: relative; }
         h1 { color: #1e293b; text-align: center; margin-bottom: 30px; padding-right: 200px; }
         h2, h3 { color: #334155; margin-top: 0; }
@@ -13,8 +12,6 @@
         .section { background: white; padding: 25px; margin-bottom: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .admin-only { display: none; background-color: #fef08a; border-left: 6px solid #eab308; padding: 20px; margin-top: 15px; border-radius: 6px; }
         .admin-section { display: none; }
-        
-        /* Clase para ocultar el registro al vendedor */
         .register-section { display: none; }
         
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 15px; }
@@ -40,7 +37,6 @@
         th { background-color: #f8fafc; color: #64748b; font-weight: 600; }
         tr:hover { background-color: #f1f5f9; }
 
-        /* Globo de productos totales reposicionado en la esquina superior */
         .kpi-container { position: absolute; top: 20px; right: 30px; z-index: 10; display: flex; gap: 10px; }
         .kpi-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .kpi-card div:first-child { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
@@ -48,7 +44,6 @@
         .kpi-sales { background: #ecfdf5; border-color: #a7f3d0; }
         .kpi-sales .kpi-value { color: #065f46; }
 
-        /* Estilos del Ticket */
         .ticket-strip { background: #fff; border: 2px dashed #cbd5e1; padding: 20px; max-width: 400px; margin: 20px auto; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
         .ticket-header { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px; }
         .ticket-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
@@ -60,7 +55,6 @@
             .kpi-container { position: static; display: flex; justify-content: center; margin-bottom: 20px; }
         }
 
-        /* Estilos específicos para la exportación de la tira de tickets */
         @media print {
             body * { visibility: hidden; background: transparent !important; box-shadow: none !important; }
             #tiraTicketsContainer, #tiraTicketsContainer * { visibility: visible; }
@@ -391,21 +385,25 @@
         let usuarios = [];
         let usuarioLogueado = null;
 
-        // Configuración de Supabase integrada con tus credenciales
         const SUPABASE_URL = "https://hctkcqjhzcmtunuqooyc.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjdGtjcWpoemNtdHVudXFvb3ljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjgyNzgsImV4cCI6MjA5OTIwNDI3OH0.iBJPJNyT-4Tv2ju0I8Dp4wz7lcwbQePYJHcHePQmaj4";
         const API_URL = `${SUPABASE_URL}/rest/v1/tienda_data?id=eq.global_state`;
 
-        // Guardar arrays en la Base de Datos en la nube (Con soporte Upsert integrado)
+        // Sistema híbrido de guardado automático (Nube + Local)
         async function guardarEnLocalStorage() {
+            // Respaldo inmediato local por si Supabase falla
+            localStorage.setItem('backup_inventario', JSON.stringify(inventario));
+            localStorage.setItem('backup_ventas', JSON.stringify(ventas));
+            localStorage.setItem('backup_usuarios', JSON.stringify(usuarios));
+
             try {
-                await fetch(`${SUPABASE_URL}/rest/v1/tienda_data`, {
-                    method: 'POST',
+                await fetch(`${SUPABASE_URL}/rest/v1/tienda_data?id=eq.global_state`, {
+                    method: 'PUT',
                     headers: {
                         'apikey': SUPABASE_KEY,
                         'Authorization': `Bearer ${SUPABASE_KEY}`,
                         'Content-Type': 'application/json',
-                        'Prefer': 'resolution=merge' // Fuerza el registro inicial si no existe
+                        'Prefer': 'return=representation'
                     },
                     body: JSON.stringify({
                         id: 'global_state',
@@ -415,11 +413,10 @@
                     })
                 });
             } catch (error) {
-                console.error("Error al guardar en la nube:", error);
+                console.warn("Supabase tiene problemas temporales. Guardado en caché del navegador.");
             }
         }
 
-        // Cargar arrays desde la Base de Datos en la nube
         async function cargarDesdeLocalStorage() {
             try {
                 const response = await fetch(API_URL, {
@@ -435,15 +432,16 @@
                     ventas = data[0].ventas || [];
                     usuarios = data[0].usuarios || [];
                 } else {
-                    inventario = [];
-                    ventas = [];
-                    usuarios = [];
+                    throw new Error("Vacío");
                 }
             } catch (error) {
-                console.error("Error al cargar desde la nube:", error);
+                // Si falla Supabase por la alerta técnica, extrae el backup local
+                console.log("Cargando desde copia local de contingencia...");
+                inventario = JSON.parse(localStorage.getItem('backup_inventario')) || [];
+                ventas = JSON.parse(localStorage.getItem('backup_ventas')) || [];
+                usuarios = JSON.parse(localStorage.getItem('backup_usuarios')) || [];
             }
             
-            // Volvemos a ejecutar la inicialización de la interfaz ahora que llegaron los datos
             const setupForm = document.getElementById('setupForm');
             const loginForm = document.getElementById('loginForm');
             const registerUserForm = document.getElementById('registerUserForm');
@@ -476,15 +474,8 @@
             actualizarTodo();
         }
 
-        // Modificación de la función inicializadora para esperar la respuesta asíncrona
         async function inicializarFlujoUsuarios() {
-            // Ponemos una pantalla de carga temporal en lo que descarga los datos de internet
-            document.getElementById('authSection').innerHTML = '<div id="loading" style="text-align:center; padding:20px; font-weight:bold;">Cargando datos compartidos...</div>' + document.getElementById('authSection').innerHTML;
-            
             await cargarDesdeLocalStorage();
-            
-            const loadingEl = document.getElementById('loading');
-            if(loadingEl) loadingEl.remove();
         }
 
         function actualizarSelectLoginUsuarios() {
@@ -498,7 +489,7 @@
             });
         }
 
-        function registrarPrimerAdmin() {
+        async function registrarPrimerAdmin() {
             const u = document.getElementById('setupUser').value.trim();
             const p = document.getElementById('setupPass').value.trim();
 
@@ -508,11 +499,13 @@
             }
 
             usuarios.push({ username: u, pass: p, role: 'admin' });
-            guardarEnLocalStorage();
-            alert("¡Administrador inicial creado con éxito! Ya puedes iniciar sesión.");
+            
+            await guardarEnLocalStorage();
+            alert("¡Administrador registrado de inmediato! Accediendo...");
             document.getElementById('setupUser').value = '';
             document.getElementById('setupPass').value = '';
-            inicializarFlujoUsuarios();
+            
+            await cargarDesdeLocalStorage();
         }
 
         function toggleRegistroVendedor(mostrar) {
@@ -520,7 +513,7 @@
             document.getElementById('registerUserForm').style.display = mostrar ? 'block' : 'none';
         }
 
-        function registrarVendedor() {
+        async function registrarVendedor() {
             const u = document.getElementById('regUser').value.trim();
             const p = document.getElementById('regPass').value.trim();
 
@@ -536,8 +529,8 @@
             }
 
             usuarios.push({ username: u, pass: p, role: 'vendedor' });
-            guardarEnLocalStorage();
-            alert(`Usuario '${u}' registrado exitosamente como Vendedor.`);
+            await guardarEnLocalStorage();
+            alert(`Usuario '${u}' registrado exitosamente.`);
             document.getElementById('regUser').value = '';
             document.getElementById('regPass').value = '';
             toggleRegistroVendedor(false);
@@ -552,8 +545,7 @@
             if (cuenta && cuenta.pass === passInput) {
                 usuarioLogueado = cuenta;
                 document.getElementById('loginPass').value = '';
-                inicializarFlujoUsuarios();
-                actualizarTodo();
+                cargarDesdeLocalStorage();
             } else {
                 alert("Contraseña incorrecta.");
             }
@@ -589,14 +581,14 @@
             }
         }
 
-        function agregarProducto() {
+        async function agregarProducto() {
             const codigo = document.getElementById('prodCodigo').value.trim();
             const nombre = document.getElementById('prodNombre').value.trim();
             const precio = parseFloat(document.getElementById('prodPrecio').value);
             const cantidad = parseInt(document.getElementById('prodCantidad').value) || 1;
 
             if(!codigo || !nombre || isNaN(precio) || precio <= 0) {
-                alert("Por favor, llena los campos básicos obligatorios con datos válidos (Código, Nombre y Precio).");
+                alert("Por favor, llena los campos básicos obligatorios.");
                 return;
             }
 
@@ -619,7 +611,7 @@
                 inventario.push(producto);
             }
             
-            guardarEnLocalStorage();
+            await guardarEnLocalStorage();
             actualizarTodo();
             document.getElementById('productForm').reset();
             checkRole(); 
@@ -666,36 +658,27 @@
                 return;
             }
 
-            let montoAColerar = 0;
-            if (tipo === 'contado') {
-                montoAColerar = parseFloat(prodEncontrado.precio);
-            } else {
-                montoAColerar = parseFloat(document.getElementById('saleAbono').value) || 0;
-            }
+            let montoAColerar = (tipo === 'contado') ? parseFloat(prodEncontrado.precio) : (parseFloat(document.getElementById('saleAbono').value) || 0);
 
             let cambio = efectivoRecibido - montoAColerar;
-            if (cambio >= 0) {
-                cambioDisplay.value = `$${cambio.toFixed(2)}`;
-            } else {
-                cambioDisplay.value = "Falta efectivo";
-            }
+            cambioDisplay.value = (cambio >= 0) ? `$${cambio.toFixed(2)}` : "Falta efectivo";
         }
 
-        function editarCantidadProducto(codigo) {
+        async function editarCantidadProducto(codigo) {
             let prod = inventario.find(p => p.codigo === codigo);
             if (!prod) return;
             
-            let nuevaCantStr = prompt(`Modificar existencias para el producto: ${prod.nombre}\nCantidad actual: ${prod.cantidad}`, prod.cantidad);
+            let nuevaCantStr = prompt(`Modificar existencias para: ${prod.nombre}\nCantidad actual: ${prod.cantidad}`, prod.cantidad);
             if (nuevaCantStr === null) return; 
             
             let nuevaCant = parseInt(nuevaCantStr);
             if (isNaN(nuevaCant) || nuevaCant < 0) {
-                alert("Por favor, ingrese una cantidad numérica válida igual o mayor a 0.");
+                alert("Ingrese una cantidad válida.");
                 return;
             }
             
             prod.cantidad = nuevaCant;
-            guardarEnLocalStorage();
+            await guardarEnLocalStorage();
             actualizarTodo();
         }
 
@@ -723,7 +706,6 @@
         function actualizarSelectProductos() {
             const datalist = document.getElementById('listaProductosDatalist');
             datalist.innerHTML = '';
-            
             inventario.forEach((prod) => {
                 if (prod.cantidad > 0) {
                     const option = document.createElement('option');
@@ -740,7 +722,6 @@
 
             let duenosUnicos = new Set();
             inventario.forEach(prod => duenosUnicos.add(prod.dueno));
-
             duenosUnicos.forEach(dueno => {
                 const option = document.createElement('option');
                 option.value = dueno;
@@ -758,16 +739,15 @@
 
             if (!targetDueno) {
                 titulo.innerText = "Productos del Dueño Seleccionado";
-                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Selecciona un dueño arriba para desplegar sus productos y existencias.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Selecciona un dueño arriba.</td></tr>`;
                 return;
             }
 
             titulo.innerText = `Productos de: ${targetDueno}`;
-
             let productosFiltrados = inventario.filter(prod => prod.dueno === targetDueno);
 
             if (productosFiltrados.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Este dueño no posee productos registrados actualmente.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Sin productos.</td></tr>`;
                 return;
             }
 
@@ -783,7 +763,7 @@
                     <td>$${prod.costosAdic}</td>
                     <td>${prod.descuento}%</td>
                     <td style="font-weight: bold; color: #1e40af;">${prod.cantidad} u.</td>
-                    <td><button type="button" class="btn-danger" onclick="editarCantidadProducto('${prod.codigo}')">Editar Cantidad</button></td>
+                    <td><button type="button" class="btn-danger" onclick="editarCantidadProducto('${prod.codigo}')">Editar</button></td>
                 `;
                 tbody.appendChild(fila);
             });
@@ -795,7 +775,6 @@
 
             listaProductos.forEach(prod => {
                 const fila = document.createElement('tr');
-                
                 fila.innerHTML = `
                     <td>${prod.codigo}</td>
                     <td>${prod.nombre}</td>
@@ -818,7 +797,7 @@
             }
         }
 
-        function procesarVenta() {
+        async function procesarVenta() {
             const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
             const tipo = document.getElementById('saleTipo').value;
             const metodo = document.getElementById('saleMetodoPago').value;
@@ -827,38 +806,23 @@
             let prodOriginal = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
 
             if(!prodOriginal) {
-                alert("Por favor, introduce o selecciona un producto válido que exista en el sistema.");
+                alert("Selecciona un producto válido.");
                 return;
             }
 
             if (prodOriginal.cantidad <= 0) {
-                alert("No hay existencias suficientes de este producto en el sistema.");
+                alert("No hay existencias.");
                 return;
             }
 
             let precioTotal = parseFloat(prodOriginal.precio);
-            let montoPagado = 0;
-
-            if (tipo === 'contado') {
-                montoPagado = precioTotal;
-            } else {
-                if (isNaN(abonoInput) || abonoInput < 0) {
-                    alert("Por favor, ingrese un monto de abono inicial válido.");
-                    return;
-                }
-                if (abonoInput > precioTotal) {
-                    alert("El abono no puede ser mayor que el precio total del producto.");
-                    return;
-                }
-                montoPagado = abonoInput;
-            }
+            let montoPagado = (tipo === 'contado') ? precioTotal : abonoInput;
 
             let restante = precioTotal - montoPagado;
             let ahora = new Date();
 
             const nuevaVenta = {
                 idVenta: 'V' + ahora.getTime(),
-                fechaObj: ahora,
                 fechaTexto: ahora.toLocaleString(),
                 fechaCorta: ahora.toLocaleDateString(),
                 anio: ahora.getFullYear(),
@@ -866,12 +830,7 @@
                 dia: ahora.getDate(),
                 codigo: prodOriginal.codigo,
                 nombre: prodOriginal.nombre,
-                marca: prodOriginal.marca,
                 dueno: prodOriginal.dueno,
-                categoria: prodOriginal.categoria,
-                costo: prodOriginal.costo,
-                costosAdic: prodOriginal.costosAdic,
-                descuento: prodOriginal.descuento,
                 tipoVenta: tipo,
                 metodoPago: metodo,
                 precioTotal: precioTotal,
@@ -882,10 +841,8 @@
             prodOriginal.cantidad--;
             ventas.push(nuevaVenta);
             
-            guardarEnLocalStorage();
-
-            alert(`¡Venta procesada con éxito!\nProducto: ${nuevaVenta.nombre}\nTotal: $${precioTotal.toFixed(2)}\nPagado/Abono: $${montoPagado.toFixed(2)}\nRestante: $${restante.toFixed(2)}`);
-
+            await guardarEnLocalStorage();
+            alert("¡Venta procesada con éxito!");
             actualizarTodo();
             document.getElementById('salesForm').reset();
             toggleMontoAbono();
@@ -896,7 +853,7 @@
             tbody.innerHTML = '';
 
             if (listaVentas.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b;">No hay ventas registradas o que coincidan con el filtro.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b;">No hay ventas.</td></tr>`;
                 return;
             }
 
@@ -929,7 +886,6 @@
                 if (fDia && v.dia != fDia) cumple = false;
                 return cumple;
             });
-
             renderizarHistorialVentas(ventasFiltradas);
         }
 
@@ -952,12 +908,8 @@
             let ventasHoy = ventas.filter(v => v.fechaCorta === hoy);
 
             if (ventasHoy.length === 0) {
-                itemsContainer.innerHTML = '<div style="text-align:center; padding:10px; color:#64748b;">No se realizaron ventas el día de hoy.</div>';
-                document.getElementById('ticketTotalCant').innerText = "0 u.";
-                document.getElementById('ticketTotalIngresado').innerText = "$0.00";
-                document.getElementById('ticketTotalPorCobrar').innerText = "$0.00";
+                itemsContainer.innerHTML = '<div style="text-align:center; padding:10px;">Sin ventas hoy.</div>';
                 container.style.display = 'block';
-                btnImprimir.style.display = 'none';
                 return;
             }
 
@@ -972,23 +924,8 @@
                 itemDiv.style.borderBottom = '1px dotted #cbd5e1';
                 itemDiv.style.padding = '8px 0';
                 itemDiv.innerHTML = `
-                    <div class="ticket-row">
-                        <strong>[${v.codigo}] ${v.nombre}</strong>
-                        <span>$${v.precioTotal.toFixed(2)}</span>
-                    </div>
-                    <div class="ticket-row" style="font-size: 11px; color: #475569;">
-                        <span>Tipo: ${v.tipoVenta.toUpperCase()} (${v.metodoPago})</span>
-                        <span>Dueño: ${v.dueno}</span>
-                    </div>
-                    <div class="ticket-row" style="font-size: 11px; color: #047857;">
-                        <span>Cobrado / Abono:</span>
-                        <span>$${v.montoPagado.toFixed(2)}</span>
-                    </div>
-                    ${v.restante > 0 ? `
-                    <div class="ticket-row" style="font-size: 11px; color: #b91c1c;">
-                        <span>Saldo Restante:</span>
-                        <span>$${v.restante.toFixed(2)}</span>
-                    </div>` : ''}
+                    <div class="ticket-row"><strong>[${v.codigo}] ${v.nombre}</strong><span>$${v.precioTotal.toFixed(2)}</span></div>
+                    <div class="ticket-row" style="font-size: 11px; color: #475569;"><span>Cobrado: $${v.montoPagado.toFixed(2)}</span></div>
                 `;
                 itemsContainer.appendChild(itemDiv);
             });
@@ -998,15 +935,12 @@
             document.getElementById('ticketTotalPorCobrar').innerText = `$${totalPorCobrar.toFixed(2)}`;
             container.style.display = 'block';
             btnImprimir.style.display = 'inline-block';
-            
-            container.scrollIntoView({ behavior: 'smooth' });
         }
 
         function imprimirCortePDF() {
             window.print();
         }
 
-        // Ejecutar flujo de seguridad inicial en carga
         inicializarFlujoUsuarios();
     </script>
 </body>
