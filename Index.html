@@ -391,28 +391,53 @@
         let usuarios = [];
         let usuarioLogueado = null;
 
-        // Guardar arrays en LocalStorage
-        function guardarEnLocalStorage() {
-            localStorage.setItem('sistema_inventario_data', JSON.stringify(inventario));
-            localStorage.setItem('sistema_ventas_data', JSON.stringify(ventas));
-            localStorage.setItem('sistema_usuarios_data', JSON.stringify(usuarios));
+        // Configuración de Supabase integrada con tus credenciales
+        const SUPABASE_URL = "https://hctkcqjhzcmtunuqooyc.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjdGtjcWpoemNtdHVudXFvb3ljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjgyNzgsImV4cCI6MjA5OTIwNDI3OH0.iBJPJNyT-4Tv2ju0I8Dp4wz7lcwbQePYJHcHePQmaj4";
+        const API_URL = `${SUPABASE_URL}/rest/v1/tienda_data?id=eq.global_state`;
+
+        // Guardar arrays en la Base de Datos en la nube
+        async function guardarEnLocalStorage() {
+            try {
+                await fetch(API_URL, {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        inventario: inventario,
+                        ventas: ventas,
+                        usuarios: usuarios
+                    })
+                });
+            } catch (error) {
+                console.error("Error al guardar en la nube:", error);
+            }
         }
 
-        // Cargar arrays desde LocalStorage
-        function cargarDesdeLocalStorage() {
-            const dataInv = localStorage.getItem('sistema_inventario_data');
-            const dataVen = localStorage.getItem('sistema_ventas_data');
-            const dataUsu = localStorage.getItem('sistema_usuarios_data');
-
-            if (dataInv) inventario = JSON.parse(dataInv);
-            if (dataVen) ventas = JSON.parse(dataVen);
-            if (dataUsu) usuarios = JSON.parse(dataUsu);
-        }
-
-        // Inicialización y verificación de pantallas de Login
-        function inicializarFlujoUsuarios() {
-            cargarDesdeLocalStorage();
+        // Cargar arrays desde la Base de Datos en la nube
+        async function cargarDesdeLocalStorage() {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    inventario = data[0].inventario || [];
+                    ventas = data[0].ventas || [];
+                    usuarios = data[0].usuarios || [];
+                }
+            } catch (error) {
+                console.error("Error al cargar desde la nube:", error);
+            }
             
+            // Volvemos a ejecutar la inicialización de la interfaz ahora que llegaron los datos
             const setupForm = document.getElementById('setupForm');
             const loginForm = document.getElementById('loginForm');
             const registerUserForm = document.getElementById('registerUserForm');
@@ -442,6 +467,18 @@
                 }
             }
             checkRole();
+            actualizarTodo();
+        }
+
+        // Modificación de la función inicializadora para esperar la respuesta asíncrona
+        async function inicializarFlujoUsuarios() {
+            // Ponemos una pantalla de carga temporal en lo que descarga los datos de internet
+            document.getElementById('authSection').innerHTML = '<div id="loading" style="text-align:center; padding:20px; font-weight:bold;">Cargando datos compartidos...</div>' + document.getElementById('authSection').innerHTML;
+            
+            await cargarDesdeLocalStorage();
+            
+            const loadingEl = document.getElementById('loading');
+            if(loadingEl) loadingEl.remove();
         }
 
         function actualizarSelectLoginUsuarios() {
