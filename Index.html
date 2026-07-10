@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Inventario y Ventas</title>
+    <title>Sistema de Inventario y Ventas (Nube)</title>
+    <!-- Incluimos la librería oficial de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; background-color: #f0f2f5; color: #333; position: relative; }
         h1 { color: #1e293b; text-align: center; margin-bottom: 30px; padding-right: 200px; }
@@ -19,49 +21,31 @@
         
         label { margin-top: 8px; font-weight: 600; font-size: 14px; color: #475569; }
         input, select { padding: 10px; margin-top: 5px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; }
-        input:focus, select:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
         
         button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: background 0.2s; width: 100%; max-width: 250px; margin-top: 15px; }
         button:hover { background-color: #1d4ed8; }
         .btn-success { background-color: #10b981; }
         .btn-success:hover { background-color: #059669; }
-        .btn-secondary { background-color: #64748b; }
-        .btn-secondary:hover { background-color: #475569; }
         .btn-danger { background-color: #ef4444; padding: 6px 12px; font-size: 13px; width: auto; margin-top: 0; }
-        .btn-danger:hover { background-color: #dc2626; }
         .btn-pdf { background-color: #ea580c; }
-        .btn-pdf:hover { background-color: #c2410c; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; }
         th, td { padding: 14px; text-align: left; border-bottom: 1px solid #e2e8f0; }
         th { background-color: #f8fafc; color: #64748b; font-weight: 600; }
-        tr:hover { background-color: #f1f5f9; }
 
         .kpi-container { position: absolute; top: 20px; right: 30px; z-index: 10; display: flex; gap: 10px; }
-        .kpi-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .kpi-card div:first-child { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+        .kpi-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 15px; border-radius: 8px; text-align: center; }
         .kpi-value { font-size: 20px; font-weight: bold; color: #1e40af; }
         .kpi-sales { background: #ecfdf5; border-color: #a7f3d0; }
         .kpi-sales .kpi-value { color: #065f46; }
 
-        .ticket-strip { background: #fff; border: 2px dashed #cbd5e1; padding: 20px; max-width: 400px; margin: 20px auto; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .ticket-header { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px; }
+        /* Indicador de Conexión */
+        .status-badge { color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 15px; }
+        .status-online { background-color: #10b981; }
+        .status-offline { background-color: #ef4444; }
+
+        .ticket-strip { background: #fff; border: 2px dashed #cbd5e1; padding: 20px; max-width: 400px; margin: 20px auto; font-family: 'Courier New', monospace; }
         .ticket-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
-        .ticket-total { border-top: 1px dashed #333; margin-top: 10px; padding-top: 10px; font-weight: bold; }
-
-        @media (max-width: 768px) {
-            body { padding-top: 120px; }
-            h1 { padding-right: 0; }
-            .kpi-container { position: static; display: flex; justify-content: center; margin-bottom: 20px; }
-        }
-
-        @media print {
-            body * { visibility: hidden; background: transparent !important; box-shadow: none !important; }
-            #tiraTicketsContainer, #tiraTicketsContainer * { visibility: visible; }
-            #tiraTicketsContainer { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
-            .ticket-strip { border: none; margin: 0 auto; max-width: 100%; width: 80mm; }
-            .btn-pdf { display: none !important; }
-        }
     </style>
 </head>
 <body>
@@ -77,871 +61,243 @@
         </div>
     </div>
 
-    <h1>Sistema de Gestión de Inventario y Ventas</h1>
+    <h1>Sistema de Gestión en la Nube</h1>
 
     <div class="section" id="authSection">
+        <!-- Badge dinámico para saber si está conectado a Supabase -->
+        <div id="connectionStatus" class="status-badge status-offline">Verificando conexión con la nube...</div>
+        
         <h2 id="authTitle">Control de Acceso</h2>
         
-        <div id="setupForm" style="display: none;">
-            <p style="color: #ea580c; font-weight: bold;">⚠️ No hay usuarios en el sistema. Registra el primer usuario (será Administrador):</p>
+        <div id="loginForm">
             <div class="form-grid">
                 <div class="form-group">
-                    <label>Nombre de Usuario Admin:</label>
-                    <input type="text" id="setupUser">
-                </div>
-                <div class="form-group">
-                    <label>Contraseña:</label>
-                    <input type="password" id="setupPass">
-                </div>
-            </div>
-            <button type="button" class="btn-success" onclick="registrarPrimerAdmin()">Crear Administrador Inicial</button>
-        </div>
-
-        <div id="loginForm" style="display: none;">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Selecciona tu Usuario:</label>
-                    <select id="loginSelectUser"></select>
+                    <label>Usuario / Vendedor:</label>
+                    <input type="text" id="loginEmail" placeholder="Ej: admin o vendedor1">
                 </div>
                 <div class="form-group">
                     <label>Contraseña:</label>
                     <input type="password" id="loginPass">
                 </div>
             </div>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" onclick="iniciarSesion()">Iniciar Sesión</button>
-                <button type="button" class="btn-secondary" onclick="toggleRegistroVendedor(true)">Registrar Nuevo Vendedor</button>
-            </div>
-        </div>
-
-        <div id="registerUserForm" style="display: none;">
-            <h3>Registrar Nuevo Usuario (Rol Vendedor)</h3>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Nombre de Usuario:</label>
-                    <input type="text" id="regUser">
-                </div>
-                <div class="form-group">
-                    <label>Contraseña:</label>
-                    <input type="password" id="regPass">
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="btn-success" onclick="registrarVendedor()">Guardar Usuario Vendedor</button>
-                <button type="button" class="btn-secondary" onclick="toggleRegistroVendedor(false)">Volver al Login</button>
-            </div>
+            <button type="button" onclick="iniciarSesion()">Iniciar Sesión</button>
         </div>
 
         <div id="userInfoView" style="display: none;">
-            <p style="font-size: 16px;">Sesión activa: <strong id="currentUserName">--</strong> (<span id="currentUserRole" style="font-weight: bold; text-transform: uppercase;">--</span>)</p>
+            <p style="font-size: 16px;">Sesión activa en la nube: <strong id="currentUserName">--</strong></p>
             <button type="button" class="btn-danger" onclick="cerrarSesion()">Cerrar Sesión</button>
         </div>
     </div>
 
     <div id="mainSystemContainer" style="display: none;">
-        <div id="registerSection" class="section register-section">
-            <h2>Registro de Productos e Inventario</h2>
-            <form id="productForm">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Código del Producto:</label>
-                        <input type="text" id="prodCodigo" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Nombre del Producto:</label>
-                        <input type="text" id="prodNombre" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Marca:</label>
-                        <input type="text" id="prodMarca" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Precio de Venta al Público:</label>
-                        <input type="number" id="prodPrecio" required>
-                    </div>
-                </div>
-
-                <div id="adminFields" class="admin-only">
-                    <h3>Campos Exclusivos de Administrador</h3>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Dueño del Producto:</label>
-                            <input type="text" id="prodDueno" placeholder="Ej. Administrador, Socio A, etc.">
-                        </div>
-                        <div class="form-group">
-                            <label>Categoría:</label>
-                            <input type="text" id="prodCategoria">
-                        </div>
-                        <div class="form-group">
-                            <label>Costo del Producto (Precio Compra):</label>
-                            <input type="number" id="prodCosto">
-                        </div>
-                        <div class="form-group">
-                            <label>Costos Adicionales / Operativos:</label>
-                            <input type="number" id="prodCostosAdic">
-                        </div>
-                        <div class="form-group">
-                            <label>Descuento Máximo Permitido (%):</label>
-                            <input type="number" id="prodDescuento" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>Cantidad Inicial en Existencia:</label>
-                            <input type="number" id="prodCantidad" value="1" min="1">
-                        </div>
-                    </div>
-                </div>
-
-                <button type="button" onclick="agregarProducto()">Registrar Producto</button>
-            </form>
-        </div>
-
+        <!-- Módulo de Ventas -->
         <div class="section">
-            <h2>Módulo de Ventas y Abonos</h2>
+            <h2>Módulo de Ventas</h2>
             <form id="salesForm">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label>Producto a Vender (Busca por Nombre o Código):</label>
-                        <input type="text" id="saleProductoBusqueda" list="listaProductosDatalist" oninput="mostrarDuenoVenta(); calcularCambio();" placeholder="Escribe el código o nombre...">
-                        <datalist id="listaProductosDatalist">
-                        </datalist>
+                        <label>Producto a Vender:</label>
+                        <input type="text" id="saleProductoBusqueda" list="listaProductosDatalist" oninput="mostrarPrecioVenta()" placeholder="Escribe código o nombre...">
+                        <datalist id="listaProductosDatalist"></datalist>
                     </div>
                     <div class="form-group">
-                        <label>Precio del Producto:</label>
-                        <input type="text" id="salePrecioDisplay" style="background-color: #ffffff; font-weight: bold; color: #1e40af;" placeholder="$0.00" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Dueño del Producto (Modificable):</label>
-                        <input type="text" id="saleDuenoDisplay" style="background-color: #ffffff;" placeholder="Dueño asignado" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>Tipo de Venta:</label>
-                        <select id="saleTipo" onchange="toggleMontoAbono(); calcularCambio();">
-                            <option value="contado">Venta de Contado</option>
-                            <option value="plazos">Venta a Plazos / Pagos</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Método de Pago:</label>
-                        <select id="saleMetodoPago">
-                            <option value="efectivo">Efectivo</option>
-                            <option value="transferencia">Transferencia</option>
-                            <option value="terminal">Terminal (Tarjeta)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="grupoMontoAbono" style="display: none;">
-                        <label>Monto de Abono Inicial / Pago Parcial:</label>
-                        <input type="number" id="saleAbono" oninput="calcularCambio()" placeholder="Ej. 500" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Efectivo Recibido (Para Calcular Cambio):</label>
-                        <input type="number" id="saleEfectivoRecibido" oninput="calcularCambio()" placeholder="Ej. 1000">
-                    </div>
-                    <div class="form-group">
-                        <label>Cambio a Regresar:</label>
-                        <input type="text" id="saleCambioDisplay" style="background-color: #f8fafc; font-weight: bold; color: #047857;" placeholder="$0.00" readonly>
+                        <label>Precio:</label>
+                        <input type="text" id="salePrecioDisplay" readonly placeholder="$0.00">
                     </div>
                 </div>
-                <button type="button" class="btn-success" onclick="procesarVenta()">Procesar Venta</button>
+                <button type="button" class="btn-success" onclick="procesarVentaNube()">Procesar Venta en Línea</button>
             </form>
         </div>
 
-        <div id="adminSalesSection" class="section admin-section">
-            <h2>Historial y Filtro de Ventas Realizadas</h2>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Filtrar por Año (YYYY):</label>
-                    <input type="number" id="filterAnio" placeholder="Ej. 2026">
-                </div>
-                <div class="form-group">
-                    <label>Filtrar por Mes (1-12):</label>
-                    <input type="number" id="filterMes" placeholder="Ej. 6" min="1" max="12">
-                </div>
-                <div class="form-group">
-                    <label>Filtrar por Día (1-31):</label>
-                    <input type="number" id="filterDia" placeholder="Ej. 18" min="1" max="31">
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button type="button" class="btn-success" onclick="filtrarVentas()">Aplicar Filtro</button>
-                <button type="button" class="btn-secondary" onclick="limpiarFiltrosVentas()">Limpiar Filtros</button>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Fecha / Hora</th>
-                        <th>Código</th>
-                        <th>Producto</th>
-                        <th>Dueño</th>
-                        <th>Tipo</th>
-                        <th>Método</th>
-                        <th>Precio Total</th>
-                        <th>Monto Pagado / Abono</th>
-                        <th>Restante</th>
-                    </tr>
-                </thead>
-                <tbody id="salesTableBody">
-                    <tr>
-                        <td colspan="9" style="text-align: center; color: #64748b;">No hay ventas registradas o que coincidan con el filtro.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div id="adminCorteSection" class="section admin-section">
-            <h2>Corte de Caja (Tira de Tickets del Día)</h2>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="btn-success" onclick="generarCorteTira()">Generar Corte de Caja de Hoy</button>
-                <button type="button" class="btn-pdf" id="btnImprimirPDF" style="display: none;" onclick="imprimirCortePDF()">Imprimir Corte en PDF</button>
-            </div>
-            
-            <div id="tiraTicketsContainer" style="display: none;">
-                <div class="ticket-strip">
-                    <div class="ticket-header">
-                        TIRA DE COMPROBACIÓN DE VENTAS<br>
-                        FECHA CORTE: <span id="ticketFechaCorte">--/--/----</span>
-                    </div>
-                    <div id="ticketItems">
-                    </div>
-                    <div class="ticket-total">
-                        <div class="ticket-row">
-                            <span>TOTAL PRODUCTOS VENDIDOS:</span>
-                            <span id="ticketTotalCant">0 u.</span>
-                        </div>
-                        <div class="ticket-row">
-                            <span>TOTAL EFECTIVO / INGRESADO:</span>
-                            <span id="ticketTotalIngresado">$0.00</span>
-                        </div>
-                        <div class="ticket-row">
-                            <span>TOTAL EN APARTADOS/DEUDA:</span>
-                            <span id="ticketTotalPorCobrar">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="adminReportsSection" class="section admin-only">
-            <h2>Control de Productos por Dueño</h2>
-            <div class="form-grid" style="max-width: 400px; margin-bottom: 20px;">
-                <div class="form-group">
-                    <label for="selectReporteDueno">Selecciona un Dueño:</label>
-                    <select id="selectReporteDueno" onchange="renderizarReportePorDueno()">
-                        <option value="">-- Selecciona un dueño --</option>
-                    </select>
-                </div>
-            </div>
-
-            <h3 id="tituloReporteDueno">Productos del Dueño Seleccionado</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
-                        <th>Marca</th>
-                        <th>Precio</th>
-                        <th>Categoría</th>
-                        <th>Costo Prod.</th>
-                        <th>Costos Adic.</th>
-                        <th>Descuento</th>
-                        <th>Cantidad en Inventario</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="ownersTableBody">
-                    <tr>
-                        <td colspan="10" style="text-align: center; color: #64748b;">Selecciona un dueño arriba para desplegar sus productos y existencias.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
         <div class="section">
-            <h2>Inventario General</h2>
+            <h2>Inventario Sincronizado</h2>
             <table>
                 <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
-                        <th>Marca</th>
-                        <th>Precio</th>
-                        <th>Cantidad disp.</th>
-                        <th class="admin-col" style="display:none;">Dueño</th>
-                        <th class="admin-col" style="display:none;">Categoría</th>
-                        <th class="admin-col" style="display:none;">Costo Prod.</th>
-                        <th class="admin-col" style="display:none;">Costos Adic.</th>
-                        <th class="admin-col" style="display:none;">Descuento</th>
-                    </tr>
+                    <tr><th>Código</th><th>Nombre</th><th>Marca</th><th>Precio</th><th>Cantidad</th></tr>
                 </thead>
-                <tbody id="inventoryTableBody">
-                </tbody>
+                <tbody id="inventoryTableBody"></tbody>
             </table>
         </div>
     </div>
 
     <script>
-        let inventario = [];
-        let ventas = []; 
-        let usuarios = [];
+        // ==========================================
+        // CONFIGURACIÓN DE TU BASE DE DATOS EN LÍNEA (MODIFICADO)
+        // ==========================================
+        const SUPABASE_URL = "https://hctkcqjizncmtunuqooyc.supabase.co"; 
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjdGtjcWpoemNtdHVudXFvb3ljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjgyNzgsImV4cCI6MjA5OTIwNDI3OH0.iBJPJNyT-4Tv2ju0I8Dp4wz7lcwbQePYJHcHePQmaj4";
+
+        let supabaseClient = null;
+        let inventarioGlobal = [];
         let usuarioLogueado = null;
 
-        const SUPABASE_URL = "https://hctkcqjhzcmtunuqooyc.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjdGtjcWpoemNtdHVudXFvb3ljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjgyNzgsImV4cCI6MjA5OTIwNDI3OH0.iBJPJNyT-4Tv2ju0I8Dp4wz7lcwbQePYJHcHePQmaj4";
-        const API_URL = `${SUPABASE_URL}/rest/v1/tienda_data?id=eq.global_state`;
+        // Inicializar conexión automáticamente
+        if(SUPABASE_URL !== "TU_SUPABASE_URL") {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            verificarConexion();
+        }
 
-        // Sistema híbrido de guardado automático (Nube + Local)
-        async function guardarEnLocalStorage() {
-            // Respaldo inmediato local por si Supabase falla
-            localStorage.setItem('backup_inventario', JSON.stringify(inventario));
-            localStorage.setItem('backup_ventas', JSON.stringify(ventas));
-            localStorage.setItem('backup_usuarios', JSON.stringify(usuarios));
-
+        async function verificarConexion() {
+            const statusBadge = document.getElementById('connectionStatus');
             try {
-                await fetch(`${SUPABASE_URL}/rest/v1/tienda_data?id=eq.global_state`, {
-                    method: 'PUT',
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': `Bearer ${SUPABASE_KEY}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=representation'
-                    },
-                    body: JSON.stringify({
-                        id: 'global_state',
-                        inventario: inventario,
-                        ventas: ventas,
-                        usuarios: usuarios
-                    })
-                });
-            } catch (error) {
-                console.warn("Supabase tiene problemas temporales. Guardado en caché del navegador.");
+                // Hacemos una consulta rápida de prueba a tu tabla 'inventario'
+                let { data, error } = await supabaseClient.from('inventario').select('codigo').limit(1);
+                if (error) throw error;
+                
+                statusBadge.innerText = "🌐 Conectado con Éxito a la Nube";
+                statusBadge.className = "status-badge status-online";
+            } catch (err) {
+                statusBadge.innerText = "❌ Error de Conexión: Revisa credenciales o CORS";
+                statusBadge.className = "status-badge status-offline";
+                console.error("Detalle del error:", err);
             }
         }
 
-        async function cargarDesdeLocalStorage() {
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'GET',
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': `Bearer ${SUPABASE_KEY}`
-                    }
-                });
-                const data = await response.json();
-                if (data && data.length > 0) {
-                    inventario = data[0].inventario || [];
-                    ventas = data[0].ventas || [];
-                    usuarios = data[0].usuarios || [];
-                } else {
-                    throw new Error("Vacío");
-                }
-            } catch (error) {
-                // Si falla Supabase por la alerta técnica, extrae el backup local
-                console.log("Cargando desde copia local de contingencia...");
-                inventario = JSON.parse(localStorage.getItem('backup_inventario')) || [];
-                ventas = JSON.parse(localStorage.getItem('backup_ventas')) || [];
-                usuarios = JSON.parse(localStorage.getItem('backup_usuarios')) || [];
+        // Validación manual buscando directamente en tu tabla personalizada 'usuarios'
+        async function iniciarSesion() {
+            const userIn = document.getElementById('loginEmail').value.trim();
+            const passIn = document.getElementById('loginPass').value.trim();
+
+            if(!userIn || !passIn) {
+                alert("Por favor completa todos los campos.");
+                return;
             }
+
+            try {
+                let { data, error } = await supabaseClient
+                    .from('usuarios')
+                    .select('*')
+                    .eq('username', userIn)
+                    .eq('password', passIn)
+                    .single();
+
+                if (error || !data) {
+                    alert("Usuario o contraseña incorrectos en la base de datos.");
+                    return;
+                }
+
+                usuarioLogueado = data;
+
+                alert("¡Sesión iniciada en línea!");
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('userInfoView').style.display = 'block';
+                document.getElementById('mainSystemContainer').style.display = 'block';
+                document.getElementById('currentUserName').innerText = usuarioLogueado.username;
+                
+                cargarDatosNube();
+            } catch (error) {
+                alert("Error de autenticación: " + error.message);
+            }
+        }
+
+        async function cargarDatosNube() {
+            if(!supabaseClient) return;
             
-            const setupForm = document.getElementById('setupForm');
-            const loginForm = document.getElementById('loginForm');
-            const registerUserForm = document.getElementById('registerUserForm');
-            const userInfoView = document.getElementById('userInfoView');
-            const mainSystemContainer = document.getElementById('mainSystemContainer');
-
-            registerUserForm.style.display = 'none';
-
-            if (usuarios.length === 0) {
-                setupForm.style.display = 'block';
-                loginForm.style.display = 'none';
-                userInfoView.style.display = 'none';
-                mainSystemContainer.style.display = 'none';
-            } else {
-                setupForm.style.display = 'none';
-                if (!usuarioLogueado) {
-                    loginForm.style.display = 'block';
-                    userInfoView.style.display = 'none';
-                    mainSystemContainer.style.display = 'none';
-                    actualizarSelectLoginUsuarios();
-                } else {
-                    loginForm.style.display = 'none';
-                    userInfoView.style.display = 'block';
-                    mainSystemContainer.style.display = 'block';
-                    document.getElementById('currentUserName').innerText = usuarioLogueado.username;
-                    document.getElementById('currentUserRole').innerText = usuarioLogueado.role;
-                }
+            // 1. Traer Inventario desde internet
+            let { data: prodData, error: prodErr } = await supabaseClient.from('inventario').select('*');
+            if(!prodErr && prodData) {
+                inventarioGlobal = prodData;
+                renderizarTablaGeneral(prodData);
+                actualizarDatalistVentas(prodData);
+                
+                // Actualizar KPI total productos
+                let totalStock = prodData.reduce((acc, p) => acc + (parseInt(p.cantidad) || 0), 0);
+                document.getElementById('totalProductosGlobal').innerText = totalStock;
             }
-            checkRole();
-            actualizarTodo();
+
+            // 2. Traer Ventas del día actual e ingresar el total al KPI
+            let hoy = new Date().toLocaleDateString();
+            let { data: ventasData, error: ventasErr } = await supabaseClient.from('ventas').select('monto_pagado').eq('fecha_corta', hoy);
+            if(!ventasErr && ventasData) {
+                let totalDinero = ventasData.reduce((acc, v) => acc + (parseFloat(v.monto_pagado) || 0), 0);
+                document.getElementById('totalVentasGlobal').innerText = `$${totalDinero.toFixed(2)}`;
+            }
         }
 
-        async function inicializarFlujoUsuarios() {
-            await cargarDesdeLocalStorage();
-        }
-
-        function actualizarSelectLoginUsuarios() {
-            const select = document.getElementById('loginSelectUser');
-            select.innerHTML = '';
-            usuarios.forEach(u => {
-                const opt = document.createElement('option');
-                opt.value = u.username;
-                opt.textContent = `${u.username} (${u.role})`;
-                select.appendChild(opt);
+        function renderizarTablaGeneral(productos) {
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = '';
+            productos.forEach(prod => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${prod.codigo}</td>
+                        <td>${prod.nombre}</td>
+                        <td>${prod.marca || 'N/A'}</td>
+                        <td>$${parseFloat(prod.precio).toFixed(2)}</td>
+                        <td style="font-weight:bold; color:${prod.cantidad <= 0 ? 'red':'black'}">${prod.cantidad} u.</td>
+                    </tr>
+                `;
             });
         }
 
-        async function registrarPrimerAdmin() {
-            const u = document.getElementById('setupUser').value.trim();
-            const p = document.getElementById('setupPass').value.trim();
+        function actualizarDatalistVentas(productos) {
+            const datalist = document.getElementById('listaProductosDatalist');
+            datalist.innerHTML = '';
+            productos.forEach(p => {
+                if(p.cantidad > 0) {
+                    let opt = document.createElement('option');
+                    opt.value = `[${p.codigo}] ${p.nombre}`;
+                    datalist.appendChild(opt);
+                }
+            });
+        }
 
-            if (!u || !p) {
-                alert("Introduce un usuario y contraseña válidos.");
+        function mostrarPrecioVenta() {
+            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
+            const prod = inventarioGlobal.find(p => `[${p.codigo}] ${p.nombre}` === valorBusqueda);
+            document.getElementById('salePrecioDisplay').value = prod ? `$${parseFloat(prod.precio).toFixed(2)}` : "";
+        }
+
+        async function procesarVentaNube() {
+            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
+            const prod = inventarioGlobal.find(p => `[${p.codigo}] ${p.nombre}` === valorBusqueda);
+
+            if(!prod) {
+                alert("Selecciona un producto válido del buscador.");
                 return;
             }
 
-            usuarios.push({ username: u, pass: p, role: 'admin' });
-            
-            await guardarEnLocalStorage();
-            alert("¡Administrador registrado de inmediato! Accediendo...");
-            document.getElementById('setupUser').value = '';
-            document.getElementById('setupPass').value = '';
-            
-            await cargarDesdeLocalStorage();
-        }
-
-        function toggleRegistroVendedor(mostrar) {
-            document.getElementById('loginForm').style.display = mostrar ? 'none' : 'block';
-            document.getElementById('registerUserForm').style.display = mostrar ? 'block' : 'none';
-        }
-
-        async function registrarVendedor() {
-            const u = document.getElementById('regUser').value.trim();
-            const p = document.getElementById('regPass').value.trim();
-
-            if (!u || !p) {
-                alert("Por favor rellena ambos campos.");
+            if(prod.cantidad <= 0) {
+                alert("Este producto no tiene existencias disponibles.");
                 return;
             }
 
-            const existe = usuarios.find(user => user.username.toLowerCase() === u.toLowerCase());
-            if (existe) {
-                alert("Este nombre de usuario ya está registrado.");
+            let ahora = new Date();
+
+            // 1. Descontar 1 del Stock en la tabla inventario
+            const { error: stockErr } = await supabaseClient
+                .from('inventario')
+                .update({ cantidad: prod.cantidad - 1 })
+                .eq('codigo', prod.codigo);
+
+            if(stockErr) {
+                alert("Error actualizando inventario: " + stockErr.message);
                 return;
             }
 
-            usuarios.push({ username: u, pass: p, role: 'vendedor' });
-            await guardarEnLocalStorage();
-            alert(`Usuario '${u}' registrado exitosamente.`);
-            document.getElementById('regUser').value = '';
-            document.getElementById('regPass').value = '';
-            toggleRegistroVendedor(false);
-            actualizarSelectLoginUsuarios();
-        }
+            // 2. Registrar venta en la tabla ventas
+            const { error: ventaErr } = await supabaseClient.from('ventas').insert({
+                codigo: prod.codigo,
+                nombre: prod.nombre,
+                monto_pagado: parseFloat(prod.precio),
+                fecha_corta: ahora.toLocaleDateString(),
+                vendedor: usuarioLogueado ? usuarioLogueado.username : "Desconocido"
+            });
 
-        function iniciarSesion() {
-            const selectedUser = document.getElementById('loginSelectUser').value;
-            const passInput = document.getElementById('loginPass').value;
-
-            const cuenta = usuarios.find(u => u.username === selectedUser);
-            if (cuenta && cuenta.pass === passInput) {
-                usuarioLogueado = cuenta;
-                document.getElementById('loginPass').value = '';
-                cargarDesdeLocalStorage();
+            if(ventaErr) {
+                alert("Venta descontada, pero falló el registro en historial: " + ventaErr.message);
             } else {
-                alert("Contraseña incorrecta.");
+                alert("¡Venta procesada y sincronizada en la nube!");
+                document.getElementById('salesForm').reset();
+                document.getElementById('salePrecioDisplay').value = "";
+                cargarDatosNube(); 
             }
         }
 
         function cerrarSesion() {
             usuarioLogueado = null;
-            inicializarFlujoUsuarios();
+            window.location.reload();
         }
-
-        function checkRole() {
-            if (!usuarioLogueado) return;
-            
-            const role = usuarioLogueado.role;
-            const registerSection = document.getElementById('registerSection');
-            const adminFields = document.getElementById('adminFields');
-            const adminReports = document.getElementById('adminReportsSection');
-            const adminSections = document.querySelectorAll('.admin-section');
-            const adminColumns = document.querySelectorAll('.admin-col');
-
-            if (role === 'admin') {
-                registerSection.style.display = 'block';
-                adminFields.style.display = 'block';
-                adminReports.style.display = 'block';
-                adminSections.forEach(sec => sec.style.display = 'block');
-                adminColumns.forEach(col => col.style.display = 'table-cell');
-            } else {
-                registerSection.style.display = 'none';
-                adminFields.style.display = 'none';
-                adminReports.style.display = 'none';
-                adminSections.forEach(sec => sec.style.display = 'none');
-                adminColumns.forEach(col => col.style.display = 'none');
-            }
-        }
-
-        async function agregarProducto() {
-            const codigo = document.getElementById('prodCodigo').value.trim();
-            const nombre = document.getElementById('prodNombre').value.trim();
-            const precio = parseFloat(document.getElementById('prodPrecio').value);
-            const cantidad = parseInt(document.getElementById('prodCantidad').value) || 1;
-
-            if(!codigo || !nombre || isNaN(precio) || precio <= 0) {
-                alert("Por favor, llena los campos básicos obligatorios.");
-                return;
-            }
-
-            let existente = inventario.find(p => p.codigo === codigo);
-            if (existente) {
-                existente.cantidad += cantidad;
-            } else {
-                const producto = {
-                    codigo: codigo,
-                    nombre: nombre,
-                    marca: document.getElementById('prodMarca').value || 'N/A',
-                    precio: precio,
-                    dueno: document.getElementById('prodDueno').value || 'No asignado',
-                    categoria: document.getElementById('prodCategoria').value || 'N/A',
-                    costo: parseFloat(document.getElementById('prodCosto').value) || 0,
-                    costosAdic: parseFloat(document.getElementById('prodCostosAdic').value) || 0,
-                    descuento: parseFloat(document.getElementById('prodDescuento').value) || 0,
-                    cantidad: cantidad
-                };
-                inventario.push(producto);
-            }
-            
-            await guardarEnLocalStorage();
-            actualizarTodo();
-            document.getElementById('productForm').reset();
-            checkRole(); 
-        }
-
-        function toggleMontoAbono() {
-            const tipo = document.getElementById('saleTipo').value;
-            const grupo = document.getElementById('grupoMontoAbono');
-            if (tipo === 'plazos') {
-                grupo.style.display = 'flex';
-                document.getElementById('saleAbono').value = "";
-            } else {
-                grupo.style.display = 'none';
-                document.getElementById('saleAbono').value = "0";
-            }
-        }
-
-        function mostrarDuenoVenta() {
-            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
-            const displayInput = document.getElementById('saleDuenoDisplay');
-            const precioInput = document.getElementById('salePrecioDisplay');
-            
-            const prodEncontrado = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
-            
-            if (prodEncontrado) {
-                displayInput.value = prodEncontrado.dueno;
-                precioInput.value = `$${parseFloat(prodEncontrado.precio).toFixed(2)}`;
-            } else {
-                displayInput.value = "";
-                precioInput.value = "";
-            }
-        }
-
-        function calcularCambio() {
-            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
-            const tipo = document.getElementById('saleTipo').value;
-            const efectivoRecibido = parseFloat(document.getElementById('saleEfectivoRecibido').value);
-            const cambioDisplay = document.getElementById('saleCambioDisplay');
-            
-            const prodEncontrado = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
-            
-            if (!prodEncontrado || isNaN(efectivoRecibido)) {
-                cambioDisplay.value = "";
-                return;
-            }
-
-            let montoAColerar = (tipo === 'contado') ? parseFloat(prodEncontrado.precio) : (parseFloat(document.getElementById('saleAbono').value) || 0);
-
-            let cambio = efectivoRecibido - montoAColerar;
-            cambioDisplay.value = (cambio >= 0) ? `$${cambio.toFixed(2)}` : "Falta efectivo";
-        }
-
-        async function editarCantidadProducto(codigo) {
-            let prod = inventario.find(p => p.codigo === codigo);
-            if (!prod) return;
-            
-            let nuevaCantStr = prompt(`Modificar existencias para: ${prod.nombre}\nCantidad actual: ${prod.cantidad}`, prod.cantidad);
-            if (nuevaCantStr === null) return; 
-            
-            let nuevaCant = parseInt(nuevaCantStr);
-            if (isNaN(nuevaCant) || nuevaCant < 0) {
-                alert("Ingrese una cantidad válida.");
-                return;
-            }
-            
-            prod.cantidad = nuevaCant;
-            await guardarEnLocalStorage();
-            actualizarTodo();
-        }
-
-        function actualizarTodo() {
-            actualizarTablaGeneral(inventario);
-            actualizarSelectProductos();
-            actualizarSelectDuenos();
-            renderizarReportePorDueno();
-            renderizarHistorialVentas(ventas);
-            actualizarKpis();
-        }
-
-        function actualizarKpis() {
-            let totalProds = inventario.reduce((acc, p) => acc + p.cantidad, 0);
-            document.getElementById('totalProductosGlobal').innerText = totalProds;
-
-            let hoy = new Date().toLocaleDateString();
-            let totalDineroHoy = ventas
-                .filter(v => v.fechaCorta === hoy)
-                .reduce((acc, v) => acc + v.montoPagado, 0);
-            
-            document.getElementById('totalVentasGlobal').innerText = `$${totalDineroHoy.toFixed(2)}`;
-        }
-
-        function actualizarSelectProductos() {
-            const datalist = document.getElementById('listaProductosDatalist');
-            datalist.innerHTML = '';
-            inventario.forEach((prod) => {
-                if (prod.cantidad > 0) {
-                    const option = document.createElement('option');
-                    option.value = `[${prod.codigo}] ${prod.nombre}`;
-                    datalist.appendChild(option);
-                }
-            });
-        }
-
-        function actualizarSelectDuenos() {
-            const select = document.getElementById('selectReporteDueno');
-            const dueñoActual = select.value;
-            select.innerHTML = '<option value="">-- Selecciona un dueño --</option>';
-
-            let duenosUnicos = new Set();
-            inventario.forEach(prod => duenosUnicos.add(prod.dueno));
-            duenosUnicos.forEach(dueno => {
-                const option = document.createElement('option');
-                option.value = dueno;
-                option.textContent = dueno;
-                if (dueno === dueñoActual) option.selected = true;
-                select.appendChild(option);
-            });
-        }
-
-        function renderizarReportePorDueno() {
-            const targetDueno = document.getElementById('selectReporteDueno').value;
-            const tbody = document.getElementById('ownersTableBody');
-            const titulo = document.getElementById('tituloReporteDueno');
-            tbody.innerHTML = '';
-
-            if (!targetDueno) {
-                titulo.innerText = "Productos del Dueño Seleccionado";
-                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Selecciona un dueño arriba.</td></tr>`;
-                return;
-            }
-
-            titulo.innerText = `Productos de: ${targetDueno}`;
-            let productosFiltrados = inventario.filter(prod => prod.dueno === targetDueno);
-
-            if (productosFiltrados.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #64748b;">Sin productos.</td></tr>`;
-                return;
-            }
-
-            productosFiltrados.forEach(prod => {
-                const fila = document.createElement('tr');
-                fila.innerHTML = `
-                    <td>${prod.codigo}</td>
-                    <td><strong>${prod.nombre}</strong></td>
-                    <td>${prod.marca}</td>
-                    <td>$${prod.precio}</td>
-                    <td>${prod.categoria}</td>
-                    <td>$${prod.costo}</td>
-                    <td>$${prod.costosAdic}</td>
-                    <td>${prod.descuento}%</td>
-                    <td style="font-weight: bold; color: #1e40af;">${prod.cantidad} u.</td>
-                    <td><button type="button" class="btn-danger" onclick="editarCantidadProducto('${prod.codigo}')">Editar</button></td>
-                `;
-                tbody.appendChild(fila);
-            });
-        }
-
-        function actualizarTablaGeneral(listaProductos) {
-            const tbody = document.getElementById('inventoryTableBody');
-            tbody.innerHTML = '';
-
-            listaProductos.forEach(prod => {
-                const fila = document.createElement('tr');
-                fila.innerHTML = `
-                    <td>${prod.codigo}</td>
-                    <td>${prod.nombre}</td>
-                    <td>${prod.marca}</td>
-                    <td>$${prod.precio}</td>
-                    <td style="font-weight: bold;">${prod.cantidad} u.</td>
-                    <td class="admin-col" style="display:none;">${prod.dueno}</td>
-                    <td class="admin-col" style="display:none;">${prod.categoria}</td>
-                    <td class="admin-col" style="display:none;">$${prod.costo}</td>
-                    <td class="admin-col" style="display:none;">$${prod.costosAdic}</td>
-                    <td class="admin-col" style="display:none;">${prod.descuento}%</td>
-                `;
-                tbody.appendChild(fila);
-            });
-            
-            if(usuarioLogueado) {
-                const role = usuarioLogueado.role;
-                const adminColumns = document.querySelectorAll('.admin-col');
-                adminColumns.forEach(col => col.style.display = (role === 'admin') ? 'table-cell' : 'none');
-            }
-        }
-
-        async function procesarVenta() {
-            const valorBusqueda = document.getElementById('saleProductoBusqueda').value;
-            const tipo = document.getElementById('saleTipo').value;
-            const metodo = document.getElementById('saleMetodoPago').value;
-            let abonoInput = parseFloat(document.getElementById('saleAbono').value);
-
-            let prodOriginal = inventario.find(prod => `[${prod.codigo}] ${prod.nombre}` === valorBusqueda);
-
-            if(!prodOriginal) {
-                alert("Selecciona un producto válido.");
-                return;
-            }
-
-            if (prodOriginal.cantidad <= 0) {
-                alert("No hay existencias.");
-                return;
-            }
-
-            let precioTotal = parseFloat(prodOriginal.precio);
-            let montoPagado = (tipo === 'contado') ? precioTotal : abonoInput;
-
-            let restante = precioTotal - montoPagado;
-            let ahora = new Date();
-
-            const nuevaVenta = {
-                idVenta: 'V' + ahora.getTime(),
-                fechaTexto: ahora.toLocaleString(),
-                fechaCorta: ahora.toLocaleDateString(),
-                anio: ahora.getFullYear(),
-                mes: ahora.getMonth() + 1,
-                dia: ahora.getDate(),
-                codigo: prodOriginal.codigo,
-                nombre: prodOriginal.nombre,
-                dueno: prodOriginal.dueno,
-                tipoVenta: tipo,
-                metodoPago: metodo,
-                precioTotal: precioTotal,
-                montoPagado: montoPagado,
-                restante: restante
-            };
-
-            prodOriginal.cantidad--;
-            ventas.push(nuevaVenta);
-            
-            await guardarEnLocalStorage();
-            alert("¡Venta procesada con éxito!");
-            actualizarTodo();
-            document.getElementById('salesForm').reset();
-            toggleMontoAbono();
-        }
-
-        function renderizarHistorialVentas(listaVentas) {
-            const tbody = document.getElementById('salesTableBody');
-            tbody.innerHTML = '';
-
-            if (listaVentas.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b;">No hay ventas.</td></tr>`;
-                return;
-            }
-
-            listaVentas.forEach(v => {
-                const fila = document.createElement('tr');
-                fila.innerHTML = `
-                    <td>${v.fechaTexto}</td>
-                    <td>${v.codigo}</td>
-                    <td><strong>${v.nombre}</strong></td>
-                    <td>${v.dueno}</td>
-                    <td><span style="padding: 3px 8px; border-radius: 4px; font-size:12px; font-weight:bold; background-color:${v.tipoVenta === 'contado' ? '#d1fae5; color:#065f46;' : '#fef3c7; color:#92400e;'}">${v.tipoVenta.toUpperCase()}</span></td>
-                    <td>${v.metodoPago.toUpperCase()}</td>
-                    <td>$${v.precioTotal.toFixed(2)}</td>
-                    <td style="color: #047857; font-weight: bold;">$${v.montoPagado.toFixed(2)}</td>
-                    <td style="color: ${v.restante > 0 ? '#b91c1c' : '#64748b'}; font-weight: bold;">$${v.restante.toFixed(2)}</td>
-                `;
-                tbody.appendChild(fila);
-            });
-        }
-
-        function filtrarVentas() {
-            const fAnio = document.getElementById('filterAnio').value;
-            const fMes = document.getElementById('filterMes').value;
-            const fDia = document.getElementById('filterDia').value;
-
-            let ventasFiltradas = ventas.filter(v => {
-                let cumple = true;
-                if (fAnio && v.anio != fAnio) cumple = false;
-                if (fMes && v.mes != fMes) cumple = false;
-                if (fDia && v.dia != fDia) cumple = false;
-                return cumple;
-            });
-            renderizarHistorialVentas(ventasFiltradas);
-        }
-
-        function limpiarFiltrosVentas() {
-            document.getElementById('filterAnio').value = "";
-            document.getElementById('filterMes').value = "";
-            document.getElementById('filterDia').value = "";
-            renderizarHistorialVentas(ventas);
-        }
-
-        function generarCorteTira() {
-            const container = document.getElementById('tiraTicketsContainer');
-            const itemsContainer = document.getElementById('ticketItems');
-            const btnImprimir = document.getElementById('btnImprimirPDF');
-            const hoy = new Date().toLocaleDateString();
-
-            document.getElementById('ticketFechaCorte').innerText = hoy;
-            itemsContainer.innerHTML = '';
-
-            let ventasHoy = ventas.filter(v => v.fechaCorta === hoy);
-
-            if (ventasHoy.length === 0) {
-                itemsContainer.innerHTML = '<div style="text-align:center; padding:10px;">Sin ventas hoy.</div>';
-                container.style.display = 'block';
-                return;
-            }
-
-            let totalIngresado = 0;
-            let totalPorCobrar = 0;
-
-            ventasHoy.forEach(v => {
-                totalIngresado += v.montoPagado;
-                totalPorCobrar += v.restante;
-
-                const itemDiv = document.createElement('div');
-                itemDiv.style.borderBottom = '1px dotted #cbd5e1';
-                itemDiv.style.padding = '8px 0';
-                itemDiv.innerHTML = `
-                    <div class="ticket-row"><strong>[${v.codigo}] ${v.nombre}</strong><span>$${v.precioTotal.toFixed(2)}</span></div>
-                    <div class="ticket-row" style="font-size: 11px; color: #475569;"><span>Cobrado: $${v.montoPagado.toFixed(2)}</span></div>
-                `;
-                itemsContainer.appendChild(itemDiv);
-            });
-
-            document.getElementById('ticketTotalCant').innerText = `${ventasHoy.length} u.`;
-            document.getElementById('ticketTotalIngresado').innerText = `$${totalIngresado.toFixed(2)}`;
-            document.getElementById('ticketTotalPorCobrar').innerText = `$${totalPorCobrar.toFixed(2)}`;
-            container.style.display = 'block';
-            btnImprimir.style.display = 'inline-block';
-        }
-
-        function imprimirCortePDF() {
-            window.print();
-        }
-
-        inicializarFlujoUsuarios();
     </script>
 </body>
 </html>
