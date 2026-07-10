@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Inventario y Ventas</title>
     <style>
+        /* Diseño mejorado, limpio y fácil de utilizar */
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; background-color: #f0f2f5; color: #333; position: relative; }
         h1 { color: #1e293b; text-align: center; margin-bottom: 30px; padding-right: 200px; }
         h2, h3 { color: #334155; margin-top: 0; }
@@ -12,6 +13,8 @@
         .section { background: white; padding: 25px; margin-bottom: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .admin-only { display: none; background-color: #fef08a; border-left: 6px solid #eab308; padding: 20px; margin-top: 15px; border-radius: 6px; }
         .admin-section { display: none; }
+        
+        /* Clase para ocultar el registro al vendedor */
         .register-section { display: none; }
         
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 15px; }
@@ -37,6 +40,7 @@
         th { background-color: #f8fafc; color: #64748b; font-weight: 600; }
         tr:hover { background-color: #f1f5f9; }
 
+        /* Globo de productos totales reposicionado en la esquina superior */
         .kpi-container { position: absolute; top: 20px; right: 30px; z-index: 10; display: flex; gap: 10px; }
         .kpi-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .kpi-card div:first-child { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
@@ -44,6 +48,7 @@
         .kpi-sales { background: #ecfdf5; border-color: #a7f3d0; }
         .kpi-sales .kpi-value { color: #065f46; }
 
+        /* Estilos del Ticket */
         .ticket-strip { background: #fff; border: 2px dashed #cbd5e1; padding: 20px; max-width: 400px; margin: 20px auto; font-family: 'Courier New', Courier, monospace; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
         .ticket-header { text-align: center; font-weight: bold; margin-bottom: 15px; border-bottom: 1px dashed #333; padding-bottom: 10px; }
         .ticket-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
@@ -55,6 +60,7 @@
             .kpi-container { position: static; display: flex; justify-content: center; margin-bottom: 20px; }
         }
 
+        /* Estilos específicos para la exportación de la tira de tickets */
         @media print {
             body * { visibility: hidden; background: transparent !important; box-shadow: none !important; }
             #tiraTicketsContainer, #tiraTicketsContainer * { visibility: visible; }
@@ -202,7 +208,8 @@
                     <div class="form-group">
                         <label>Producto a Vender (Busca por Nombre o Código):</label>
                         <input type="text" id="saleProductoBusqueda" list="listaProductosDatalist" oninput="mostrarDuenoVenta(); calcularCambio();" placeholder="Escribe el código o nombre...">
-                        <datalist id="listaProductosDatalist"></datalist>
+                        <datalist id="listaProductosDatalist">
+                        </datalist>
                     </div>
                     <div class="form-group">
                         <label>Precio del Producto:</label>
@@ -300,7 +307,8 @@
                         TIRA DE COMPROBACIÓN DE VENTAS<br>
                         FECHA CORTE: <span id="ticketFechaCorte">--/--/----</span>
                     </div>
-                    <div id="ticketItems"></div>
+                    <div id="ticketItems">
+                    </div>
                     <div class="ticket-total">
                         <div class="ticket-row">
                             <span>TOTAL PRODUCTOS VENDIDOS:</span>
@@ -371,7 +379,8 @@
                         <th class="admin-col" style="display:none;">Descuento</th>
                     </tr>
                 </thead>
-                <tbody id="inventoryTableBody"></tbody>
+                <tbody id="inventoryTableBody">
+                </tbody>
             </table>
         </div>
     </div>
@@ -382,17 +391,7 @@
         let usuarios = [];
         let usuarioLogueado = null;
 
-        function guardarEnLocalStorage() {
-            localStorage.setItem('inventario_local', JSON.stringify(inventario));
-            localStorage.setItem('ventas_local', JSON.stringify(ventas));
-            localStorage.setItem('usuarios_local', JSON.stringify(usuarios));
-        }
-
-        function cargarDesdeLocalStorage() {
-            inventario = JSON.parse(localStorage.getItem('inventario_local')) || [];
-            ventas = JSON.parse(localStorage.getItem('ventas_local')) || [];
-            usuarios = JSON.parse(localStorage.getItem('usuarios_local')) || [];
-            
+        function inicializarFlujoUsuarios() {
             const setupForm = document.getElementById('setupForm');
             const loginForm = document.getElementById('loginForm');
             const registerUserForm = document.getElementById('registerUserForm');
@@ -425,10 +424,6 @@
             actualizarTodo();
         }
 
-        function inicializarFlujoUsuarios() {
-            cargarDesdeLocalStorage();
-        }
-
         function actualizarSelectLoginUsuarios() {
             const select = document.getElementById('loginSelectUser');
             select.innerHTML = '';
@@ -450,7 +445,6 @@
             }
 
             usuarios.push({ username: u, pass: p, role: 'admin' });
-            guardarEnLocalStorage();
             alert("¡Administrador inicial creado con éxito! Ya puedes iniciar sesión.");
             document.getElementById('setupUser').value = '';
             document.getElementById('setupPass').value = '';
@@ -478,7 +472,6 @@
             }
 
             usuarios.push({ username: u, pass: p, role: 'vendedor' });
-            guardarEnLocalStorage();
             alert(`Usuario '${u}' registrado exitosamente como Vendedor.`);
             document.getElementById('regUser').value = '';
             document.getElementById('regPass').value = '';
@@ -561,7 +554,6 @@
                 inventario.push(producto);
             }
             
-            guardarEnLocalStorage();
             actualizarTodo();
             document.getElementById('productForm').reset();
             checkRole(); 
@@ -637,7 +629,6 @@
             }
             
             prod.cantidad = nuevaCant;
-            guardarEnLocalStorage();
             actualizarTodo();
         }
 
@@ -804,7 +795,7 @@
                 fechaTexto: ahora.toLocaleString(),
                 fechaCorta: ahora.toLocaleDateString(),
                 anio: ahora.getFullYear(),
-                mes: ahora.getMonth() + 1,
+                mes: chronologicalMonth = ahora.getMonth() + 1,
                 dia: ahora.getDate(),
                 codigo: prodOriginal.codigo,
                 nombre: prodOriginal.nombre,
@@ -823,8 +814,6 @@
 
             prodOriginal.cantidad--;
             ventas.push(nuevaVenta);
-            
-            guardarEnLocalStorage();
 
             alert(`¡Venta procesada con éxito!\nProducto: ${nuevaVenta.nombre}\nTotal: $${precioTotal.toFixed(2)}\nPagado/Abono: $${montoPagado.toFixed(2)}\nRestante: $${restante.toFixed(2)}`);
 
