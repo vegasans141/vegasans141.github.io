@@ -39,11 +39,6 @@
         .kpi-sales { background: #ecfdf5; border-color: #a7f3d0; }
         .kpi-sales .kpi-value { color: #065f46; }
 
-        /* Indicador de Conexión */
-        .status-badge { color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 15px; }
-        .status-online { background-color: #10b981; }
-        .status-offline { background-color: #ef4444; }
-
         .ticket-strip { background: #fff; border: 2px dashed #cbd5e1; padding: 20px; max-width: 400px; margin: 20px auto; font-family: 'Courier New', monospace; }
         .ticket-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
     </style>
@@ -64,9 +59,6 @@
     <h1>Sistema de Gestión en la Nube</h1>
 
     <div class="section" id="authSection">
-        <!-- Badge dinámico para saber si está conectado a Supabase -->
-        <div id="connectionStatus" class="status-badge status-offline">Verificando conexión con la nube...</div>
-        
         <h2 id="authTitle">Control de Acceso</h2>
         
         <div id="loginForm">
@@ -121,39 +113,14 @@
     </div>
 
     <script>
-        // ==========================================
-        // CONFIGURACIÓN DE TU BASE DE DATOS EN LÍNEA (MODIFICADO)
-        // ==========================================
         const SUPABASE_URL = "https://hctkcqjizncmtunuqooyc.supabase.co"; 
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhjdGtjcWpoemNtdHVudXFvb3ljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjgyNzgsImV4cCI6MjA5OTIwNDI3OH0.iBJPJNyT-4Tv2ju0I8Dp4wz7lcwbQePYJHcHePQmaj4";
 
-        let supabaseClient = null;
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         let inventarioGlobal = [];
         let usuarioLogueado = null;
 
-        // Inicializar conexión automáticamente
-        if(SUPABASE_URL !== "TU_SUPABASE_URL") {
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            verificarConexion();
-        }
-
-        async function verificarConexion() {
-            const statusBadge = document.getElementById('connectionStatus');
-            try {
-                // Hacemos una consulta rápida de prueba a tu tabla 'inventario'
-                let { data, error } = await supabaseClient.from('inventario').select('codigo').limit(1);
-                if (error) throw error;
-                
-                statusBadge.innerText = "🌐 Conectado con Éxito a la Nube";
-                statusBadge.className = "status-badge status-online";
-            } catch (err) {
-                statusBadge.innerText = "❌ Error de Conexión: Revisa credenciales o CORS";
-                statusBadge.className = "status-badge status-offline";
-                console.error("Detalle del error:", err);
-            }
-        }
-
-        // Validación manual buscando directamente en tu tabla personalizada 'usuarios'
+        // Validación manual buscando directamente en tu tabla 'usuarios'
         async function iniciarSesion() {
             const userIn = document.getElementById('loginEmail').value.trim();
             const passIn = document.getElementById('loginPass').value.trim();
@@ -172,7 +139,7 @@
                     .single();
 
                 if (error || !data) {
-                    alert("Usuario o contraseña incorrectos en la base de datos.");
+                    alert("Usuario o contraseña incorrectos o error de RLS en Supabase.");
                     return;
                 }
 
@@ -200,12 +167,11 @@
                 renderizarTablaGeneral(prodData);
                 actualizarDatalistVentas(prodData);
                 
-                // Actualizar KPI total productos
                 let totalStock = prodData.reduce((acc, p) => acc + (parseInt(p.cantidad) || 0), 0);
                 document.getElementById('totalProductosGlobal').innerText = totalStock;
             }
 
-            // 2. Traer Ventas del día actual e ingresar el total al KPI
+            // 2. Traer Ventas del día actual para el KPI
             let hoy = new Date().toLocaleDateString();
             let { data: ventasData, error: ventasErr } = await supabaseClient.from('ventas').select('monto_pagado').eq('fecha_corta', hoy);
             if(!ventasErr && ventasData) {
@@ -264,7 +230,6 @@
 
             let ahora = new Date();
 
-            // 1. Descontar 1 del Stock en la tabla inventario
             const { error: stockErr } = await supabaseClient
                 .from('inventario')
                 .update({ cantidad: prod.cantidad - 1 })
@@ -275,7 +240,6 @@
                 return;
             }
 
-            // 2. Registrar venta en la tabla ventas
             const { error: ventaErr } = await supabaseClient.from('ventas').insert({
                 codigo: prod.codigo,
                 nombre: prod.nombre,
