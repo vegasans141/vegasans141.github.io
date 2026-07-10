@@ -34,6 +34,8 @@
         .btn-danger:hover { background-color: #dc2626; }
         .btn-pdf { background-color: #ea580c; }
         .btn-pdf:hover { background-color: #c2410c; }
+        .btn-excel { background-color: #15803d; }
+        .btn-excel:hover { background-color: #166534; }
         
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; }
         th, td { padding: 14px; text-align: left; border-bottom: 1px solid #e2e8f0; }
@@ -363,7 +365,11 @@
         </div>
 
         <div class="section">
-            <h2>Inventario General</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <h2>Inventario General</h2>
+                <!-- Botón verde para exportar archivo Excel de respaldo -->
+                <button type="button" class="btn-excel" onclick="descargarExcelRespaldo()" style="max-width: 280px; margin-top: 0;">📊 Descargar Respaldo Excel</button>
+            </div>
             <table>
                 <thead>
                     <tr>
@@ -386,10 +392,18 @@
     </div>
 
     <script>
-        let inventario = [];
-        let ventas = []; 
-        let usuarios = [];
+        // Carga inicial desde localStorage para evitar que se borren los datos al recargar
+        let inventario = JSON.parse(localStorage.getItem('sys_inventario')) || [];
+        let ventas = JSON.parse(localStorage.getItem('sys_ventas')) || []; 
+        let usuarios = JSON.parse(localStorage.getItem('sys_usuarios')) || [];
         let usuarioLogueado = null;
+
+        // Función interna para sincronizar los cambios en la memoria del equipo
+        function guardarEnLocalStorage() {
+            localStorage.setItem('sys_inventario', JSON.stringify(inventario));
+            localStorage.setItem('sys_ventas', JSON.stringify(ventas));
+            localStorage.setItem('sys_usuarios', JSON.stringify(usuarios));
+        }
 
         function inicializarFlujoUsuarios() {
             const setupForm = document.getElementById('setupForm');
@@ -445,6 +459,7 @@
             }
 
             usuarios.push({ username: u, pass: p, role: 'admin' });
+            guardarEnLocalStorage();
             alert("¡Administrador inicial creado con éxito! Ya puedes iniciar sesión.");
             document.getElementById('setupUser').value = '';
             document.getElementById('setupPass').value = '';
@@ -472,6 +487,7 @@
             }
 
             usuarios.push({ username: u, pass: p, role: 'vendedor' });
+            guardarEnLocalStorage();
             alert(`Usuario '${u}' registrado exitosamente como Vendedor.`);
             document.getElementById('regUser').value = '';
             document.getElementById('regPass').value = '';
@@ -554,6 +570,7 @@
                 inventario.push(producto);
             }
             
+            guardarEnLocalStorage();
             actualizarTodo();
             document.getElementById('productForm').reset();
             checkRole(); 
@@ -629,6 +646,7 @@
             }
             
             prod.cantidad = nuevaCant;
+            guardarEnLocalStorage();
             actualizarTodo();
         }
 
@@ -795,7 +813,7 @@
                 fechaTexto: ahora.toLocaleString(),
                 fechaCorta: ahora.toLocaleDateString(),
                 anio: ahora.getFullYear(),
-                mes: chronologicalMonth = ahora.getMonth() + 1,
+                mes: ahora.getMonth() + 1,
                 dia: ahora.getDate(),
                 codigo: prodOriginal.codigo,
                 nombre: prodOriginal.nombre,
@@ -815,6 +833,7 @@
             prodOriginal.cantidad--;
             ventas.push(nuevaVenta);
 
+            guardarEnLocalStorage();
             alert(`¡Venta procesada con éxito!\nProducto: ${nuevaVenta.nombre}\nTotal: $${precioTotal.toFixed(2)}\nPagado/Abono: $${montoPagado.toFixed(2)}\nRestante: $${restante.toFixed(2)}`);
 
             actualizarTodo();
@@ -935,6 +954,122 @@
 
         function imprimirCortePDF() {
             window.print();
+        }
+
+        // Nueva función avanzada para exportar a un libro real de Excel estructurado en varias pestañas
+        function descargarExcelRespaldo() {
+            if (inventario.length === 0 && ventas.length === 0) {
+                alert("No hay datos en el sistema para respaldar todavía.");
+                return;
+            }
+
+            // Construcción del documento usando el formato nativo XML de Microsoft Excel
+            let xml = `<?xml version="1.0" encoding="utf-8"?>\n`;
+            xml += `<?mso-application progid="Excel.Sheet"?>\n`;
+            xml += `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" `;
+            xml += `xmlns:o="urn:schemas-microsoft-com:office:office" `;
+            xml += `xmlns:x="urn:schemas-microsoft-com:office:excel" `;
+            xml += `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" `;
+            xml += `xmlns:html="http://www.w3.org/TR/REC-html40">\n`;
+            
+            // Definición de Estilos (Encabezados en Negrita)
+            xml += `  <Styles>\n`;
+            xml += `    <Style ss:ID="HeaderStyle">\n`;
+            xml += `      <Font ss:Bold="1" ss:Color="#FFFFFF"/>\n`;
+            xml += `      <Interior ss:Color="#1E293B" ss:Pattern="Solid"/>\n`;
+            xml += `    </Style>\n`;
+            xml += `  </Styles>\n`;
+
+            // PESTAÑA 1: INVENTARIO
+            xml += `  <Worksheet ss:Name="Inventario">\n`;
+            xml += `    <Table>\n`;
+            // Columnas del Inventario
+            xml += `      <Row ss:StyleID="HeaderStyle">\n`;
+            xml += `        <Cell><Data ss:Type="String">Código</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Nombre del Producto</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Marca</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Precio Venta</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Existencias</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Dueño</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Categoría</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Costo Compra</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Costos Adic.</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Descuento (%)</Data></Cell>\n`;
+            xml += `      </Row>\n`;
+            
+            if (inventario.length === 0) {
+                xml += `      <Row><Cell><Data ss:Type="String">Sin productos en inventario</Data></Cell></Row>\n`;
+            } else {
+                inventario.forEach(p => {
+                    xml += `      <Row>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${p.codigo}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${p.nombre}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${p.marca}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${p.precio}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${p.cantidad}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${p.dueno}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${p.categoria}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${p.costo}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${p.costosAdic}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${p.descuento}</Data></Cell>\n`;
+                    xml += `      </Row>\n`;
+                });
+            }
+            xml += `    </Table>\n`;
+            xml += `  </Worksheet>\n`;
+
+            // PESTAÑA 2: HISTORIAL DE VENTAS
+            xml += `  <Worksheet ss:Name="Historial de Ventas">\n`;
+            xml += `    <Table>\n`;
+            // Columnas de Ventas
+            xml += `      <Row ss:StyleID="HeaderStyle">\n`;
+            xml += `        <Cell><Data ss:Type="String">ID Venta</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Fecha y Hora</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Código Producto</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Nombre Producto</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Dueño</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Tipo Venta</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Método Pago</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Precio Total</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Monto Pagado</Data></Cell>\n`;
+            xml += `        <Cell><Data ss:Type="String">Restante de Deuda</Data></Cell>\n`;
+            xml += `      </Row>\n`;
+
+            if (ventas.length === 0) {
+                xml += `      <Row><Cell><Data ss:Type="String">Sin ventas registradas</Data></Cell></Row>\n`;
+            } else {
+                ventas.forEach(v => {
+                    xml += `      <Row>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.idVenta}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.fechaTexto}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.codigo}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.nombre}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.dueno}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.tipoVenta.toUpperCase()}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="String">${v.metodoPago.toUpperCase()}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${v.precioTotal}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${v.montoPagado}</Data></Cell>\n`;
+                    xml += `        <Cell><Data ss:Type="Number">${v.restante}</Data></Cell>\n`;
+                    xml += `      </Row>\n`;
+                });
+            }
+            xml += `    </Table>\n`;
+            xml += `  </Worksheet>\n`;
+            
+            xml += `</Workbook>\n`;
+
+            // Exportación del archivo binario .xls ligero
+            const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+            const link = document.createElement('a');
+            const fechaHoyStr = new Date().toISOString().slice(0,10);
+            
+            link.download = `respaldo_sistema_${fechaHoyStr}.xls`;
+            link.href = window.URL.createObjectURL(blob);
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         inicializarFlujoUsuarios();
